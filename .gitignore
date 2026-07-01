@@ -3,7 +3,8 @@
 .swiftpm/
 .swift-home/
 .superpowers/
+design/
+Resources/AppIcon.iconset/
 dist/
 *.dSYM/
 *.xcuserstate
-

@@ -8,6 +8,8 @@
     <string>CodexMeter</string>
     <key>CFBundleExecutable</key>
     <string>CodexMeter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.local.CodexMeter</string>
     <key>CFBundleInfoDictionaryVersion</key>

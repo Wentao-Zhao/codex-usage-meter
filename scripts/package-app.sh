@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$ROOT_DIR/dist/CodexMeter.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 export HOME="${HOME:-$ROOT_DIR/.swift-home}"
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$ROOT_DIR/.build/clang-module-cache}"
@@ -20,10 +21,15 @@ cd "$ROOT_DIR"
 swift build "${BUILD_ARGS[@]}"
 BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 
+if [[ ! -f "$ROOT_DIR/Resources/AppIcon.icns" ]]; then
+    "$ROOT_DIR/scripts/generate-app-icon.sh"
+fi
+
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 install -m 755 "$BIN_DIR/CodexMeter" "$MACOS_DIR/CodexMeter"
 install -m 644 "$ROOT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+install -m 644 "$ROOT_DIR/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CONTENTS_DIR/Info.plist")"
 SIGNING_IDENTITY="${CODEX_METER_SIGNING_IDENTITY:--}"
