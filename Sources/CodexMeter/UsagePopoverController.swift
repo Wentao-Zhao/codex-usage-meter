@@ -200,6 +200,7 @@ private final class ProgressBarView: NSView {
 }
 
 private final class QuotaCardView: CardView {
+  private let contentView = NSView()
   private let titleLabel = NSTextField(labelWithString: "--")
   private let percentLabel = NSTextField(labelWithString: "--")
   private let countdownLabel = NSTextField(labelWithString: "暂无额度数据")
@@ -215,26 +216,34 @@ private final class QuotaCardView: CardView {
     countdownLabel.textColor = .secondaryLabelColor
     countdownLabel.lineBreakMode = .byTruncatingTail
 
+    contentView.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(contentView)
+
     [titleLabel, percentLabel, countdownLabel, progress].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
-      addSubview($0)
+      contentView.addSubview($0)
     }
 
     NSLayoutConstraint.activate([
-      titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+      contentView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+      contentView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
+      contentView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 3),
+
+      titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor),
+      titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
-      percentLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
+      percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: percentLabel.leadingAnchor, constant: -8),
 
       countdownLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
-      countdownLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
-      countdownLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
+      countdownLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      countdownLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
       progress.topAnchor.constraint(equalTo: countdownLabel.bottomAnchor, constant: 9),
-      progress.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
-      progress.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
+      progress.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      progress.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       progress.heightAnchor.constraint(equalToConstant: 4),
+      progress.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
     ])
   }
 
