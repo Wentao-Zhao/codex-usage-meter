@@ -156,10 +156,17 @@ final class StatusItemController: NSObject {
     if snapshot.isIndexing {
       return "CodexMeter：正在建立索引"
     }
-    guard let primary = snapshot.primary else {
+    guard let statusLimitKind = snapshot.statusLimitKind else {
       return "CodexMeter：暂无额度数据"
     }
-    let remaining = Int(RateLimitPolicy.remainingPercent(for: primary).rounded())
-    return "Codex 五小时剩余 \(remaining)%"
+    let window = statusLimitKind == .fiveHour
+      ? snapshot.fiveHourLimit
+      : snapshot.weeklyLimit
+    guard let window else {
+      return "CodexMeter：暂无额度数据"
+    }
+    let remaining = Int(RateLimitPolicy.remainingPercent(for: window).rounded())
+    let title = statusLimitKind == .fiveHour ? "五小时" : "本周"
+    return "Codex \(title)剩余 \(remaining)%"
   }
 }

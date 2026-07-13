@@ -9,6 +9,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
   private let updatedLabel = NSTextField(labelWithString: "正在读取")
   private let primaryCard = QuotaCardView()
   private let secondaryCard = QuotaCardView()
+  private lazy var quotaStack = NSStackView(views: [primaryCard, secondaryCard])
   private let todayCard = TrendCardView()
   private let weekCard = TrendCardView()
   private let totalCard = TrendCardView()
@@ -39,8 +40,9 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
 
   func update(snapshot: UsageSnapshot) {
     let now = snapshot.generatedAt
-    primaryCard.update(window: snapshot.primary, now: now, isWeekly: false)
-    secondaryCard.update(window: snapshot.secondary, now: now, isWeekly: true)
+    primaryCard.isHidden = snapshot.fiveHourLimit == nil
+    primaryCard.update(window: snapshot.fiveHourLimit, now: now, kind: .fiveHour)
+    secondaryCard.update(window: snapshot.weeklyLimit, now: now, kind: .weekly)
 
     todayCard.update(
       title: "今日消耗",
@@ -86,7 +88,13 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     updatedLabel.textColor = .secondaryLabelColor
     updatedLabel.alignment = .right
 
-    [titleLabel, updatedLabel, primaryCard, secondaryCard, todayCard, weekCard, totalCard].forEach {
+    quotaStack.orientation = .horizontal
+    quotaStack.distribution = .fillEqually
+    quotaStack.spacing = 8
+    quotaStack.detachesHiddenViews = true
+    primaryCard.isHidden = true
+
+    [titleLabel, updatedLabel, quotaStack, todayCard, weekCard, totalCard].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
       rootView.addSubview($0)
     }
@@ -101,16 +109,12 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
       updatedLabel.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
       titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: updatedLabel.leadingAnchor, constant: -8),
 
-      primaryCard.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 13),
-      primaryCard.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
-      primaryCard.heightAnchor.constraint(equalToConstant: 88),
-      secondaryCard.topAnchor.constraint(equalTo: primaryCard.topAnchor),
-      secondaryCard.leadingAnchor.constraint(equalTo: primaryCard.trailingAnchor, constant: 8),
-      secondaryCard.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
-      secondaryCard.widthAnchor.constraint(equalTo: primaryCard.widthAnchor),
-      secondaryCard.heightAnchor.constraint(equalTo: primaryCard.heightAnchor),
+      quotaStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 13),
+      quotaStack.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
+      quotaStack.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
+      quotaStack.heightAnchor.constraint(equalToConstant: 88),
 
-      todayCard.topAnchor.constraint(equalTo: primaryCard.bottomAnchor, constant: 10),
+      todayCard.topAnchor.constraint(equalTo: quotaStack.bottomAnchor, constant: 10),
       todayCard.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
       todayCard.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
       todayCard.heightAnchor.constraint(equalToConstant: 62),
@@ -251,9 +255,9 @@ private final class QuotaCardView: CardView {
     nil
   }
 
-  func update(window: RateLimitWindow?, now: Date, isWeekly: Bool) {
-    titleLabel.stringValue = isWeekly ? "本周剩余" : "5 小时剩余"
-    progress.fillColor = isWeekly
+  func update(window: RateLimitWindow?, now: Date, kind: RateLimitKind) {
+    titleLabel.stringValue = kind == .weekly ? "本周剩余" : "5 小时剩余"
+    progress.fillColor = kind == .weekly
       ? NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1)
       : StatusDotIcon.color(for: .green)
     guard let window else {
@@ -269,7 +273,7 @@ private final class QuotaCardView: CardView {
 
     if RateLimitPolicy.isStale(window, now: now) {
       countdownLabel.stringValue = "等待 Codex 更新"
-    } else if isWeekly {
+    } else if kind == .weekly {
       countdownLabel.stringValue = "\(RateLimitPolicy.daysUntilReset(window, now: now)) 天后刷新"
     } else {
       countdownLabel.stringValue = "\(RateLimitPolicy.minutesUntilReset(window, now: now)) 分钟后刷新"

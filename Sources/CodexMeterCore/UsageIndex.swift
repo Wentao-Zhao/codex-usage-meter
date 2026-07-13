@@ -38,8 +38,9 @@ public struct UsageSnapshot: Equatable, Sendable {
   public let weekly: [Int64]
   public let monthly: [Int64]
   public let monthKeys: [String]
-  public let primary: RateLimitWindow?
-  public let secondary: RateLimitWindow?
+  public let fiveHourLimit: RateLimitWindow?
+  public let weeklyLimit: RateLimitWindow?
+  public let statusLimitKind: RateLimitKind?
   public let latestRateLimitAt: Date?
   public let statusColor: UsageStatusColor
 
@@ -89,9 +90,10 @@ public struct UsageIndex: Codable, Equatable, Sendable {
     }
 
     let bucketSnapshot = merged.snapshot(now: now)
-    let primary = latestEvent?.primary
-    let stale = primary.map { RateLimitPolicy.isStale($0, now: now) } ?? true
-    let remaining = primary.map(RateLimitPolicy.remainingPercent(for:))
+    let resolvedRateLimits = latestEvent?.resolvedRateLimits
+    let statusWindow = resolvedRateLimits?.statusWindow
+    let stale = statusWindow.map { RateLimitPolicy.isStale($0, now: now) } ?? true
+    let remaining = statusWindow.map(RateLimitPolicy.remainingPercent(for:))
 
     return UsageSnapshot(
       generatedAt: now,
@@ -103,8 +105,9 @@ public struct UsageIndex: Codable, Equatable, Sendable {
       weekly: bucketSnapshot.weekly,
       monthly: bucketSnapshot.monthly,
       monthKeys: bucketSnapshot.monthKeys,
-      primary: primary,
-      secondary: latestEvent?.secondary,
+      fiveHourLimit: resolvedRateLimits?.fiveHour,
+      weeklyLimit: resolvedRateLimits?.weekly,
+      statusLimitKind: resolvedRateLimits?.statusKind,
       latestRateLimitAt: latestEvent?.timestamp,
       statusColor: RateLimitPolicy.color(remainingPercent: remaining, isStale: stale)
     )

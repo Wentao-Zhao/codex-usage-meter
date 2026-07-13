@@ -50,8 +50,16 @@ check(parsedEvent?.totalTokens == 1_250, "parse total tokens")
 check(parsedEvent?.primary?.windowMinutes == 300, "parse five-hour window")
 check(parsedEvent?.primary?.usedPercent == 24, "parse primary usage")
 check(parsedEvent?.secondary?.windowMinutes == 10_080, "parse weekly window")
+check(parsedEvent?.resolvedRateLimits.fiveHour == parsedEvent?.primary, "resolve five-hour window by duration")
+check(parsedEvent?.resolvedRateLimits.weekly == parsedEvent?.secondary, "resolve weekly window by duration")
 check(TokenEventParser.parse(line: Data("not json".utf8)) == nil, "skip malformed JSON")
 check(TokenEventParser.parse(line: Data(#"{"type":"event_msg","payload":{"type":"other"}}"#.utf8)) == nil, "skip other events")
+
+let weeklyOnlyFixtureLine = Data(#"{"timestamp":"2026-07-13T06:09:48.277Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":261660508}},"rate_limits":{"primary":{"used_percent":16.0,"window_minutes":10080,"resets_at":1784509654},"secondary":null}}}"#.utf8)
+let weeklyOnlyEvent = TokenEventParser.parse(line: weeklyOnlyFixtureLine)
+check(weeklyOnlyEvent?.resolvedRateLimits.fiveHour == nil, "weekly-only payload has no five-hour limit")
+check(weeklyOnlyEvent?.resolvedRateLimits.weekly?.usedPercent == 16, "resolve weekly limit when it moves to primary")
+check(weeklyOnlyEvent?.resolvedRateLimits.statusKind == .weekly, "weekly limit drives status when five-hour limit is absent")
 
 var accumulator = SessionUsageAccumulator()
 check(accumulator.consume(totalTokens: 100) == 100, "first counter")
@@ -140,8 +148,36 @@ usageIndex.upsert(firstSession)
 usageIndex.upsert(secondSession)
 let mergedSnapshot = usageIndex.snapshot(now: countdownNow, isIndexing: false)
 check(mergedSnapshot.todayTotal == 200, "merge session contributions")
-check(mergedSnapshot.primary?.usedPercent == 40, "select newest rate limit")
+check(mergedSnapshot.fiveHourLimit?.usedPercent == 40, "select newest five-hour limit")
+check(mergedSnapshot.weeklyLimit == weekWindow, "select weekly limit")
+check(mergedSnapshot.statusLimitKind == .fiveHour, "five-hour limit keeps status priority")
 check(mergedSnapshot.statusColor == .yellow, "snapshot derives current status color")
+
+let weeklyOnlySession = SessionUsageIndex(
+  sessionID: "weekly-only",
+  path: "/tmp/weekly-only.jsonl",
+  fileIdentity: "inode-3",
+  parsedBytes: 90,
+  accumulator: SessionUsageAccumulator(lastTotalTokens: 90),
+  buckets: UsageBuckets(timeZoneIdentifier: "Asia/Shanghai"),
+  latestRateLimit: TokenUsageEvent(
+    timestamp: countdownNow.addingTimeInterval(120),
+    totalTokens: 90,
+    primary: RateLimitWindow(
+      usedPercent: 75,
+      windowMinutes: 10_080,
+      resetsAt: countdownNow.addingTimeInterval(3 * 86_400)
+    ),
+    secondary: nil
+  )
+)
+var weeklyOnlyIndex = UsageIndex(timeZoneIdentifier: "Asia/Shanghai")
+weeklyOnlyIndex.upsert(weeklyOnlySession)
+let weeklyOnlySnapshot = weeklyOnlyIndex.snapshot(now: countdownNow, isIndexing: false)
+check(weeklyOnlySnapshot.fiveHourLimit == nil, "snapshot omits unavailable five-hour limit")
+check(weeklyOnlySnapshot.weeklyLimit?.usedPercent == 75, "snapshot exposes weekly-only limit")
+check(weeklyOnlySnapshot.statusLimitKind == .weekly, "snapshot uses weekly status fallback")
+check(weeklyOnlySnapshot.statusColor == .orange, "weekly remaining percentage drives status color")
 
 let encodedIndex = try JSONEncoder().encode(usageIndex)
 let decodedIndex = try JSONDecoder().decode(UsageIndex.self, from: encodedIndex)
