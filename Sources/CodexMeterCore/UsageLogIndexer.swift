@@ -75,13 +75,19 @@ public final class UsageLogIndexer {
 
     let scanResult = try JSONLTokenScanner.scan(
       fileURL: file.url,
-      fromOffset: session.parsedBytes
+      fromOffset: session.parsedBytes,
+      context: session.scanContext
     )
 
+    if session.accumulator.lastUsage == nil,
+       let initialUsage = scanResult.initialUsage {
+      session.accumulator = SessionUsageAccumulator(lastUsage: initialUsage)
+    }
+
     for event in scanResult.events {
-      if let totalTokens = event.totalTokens {
-        let delta = session.accumulator.consume(totalTokens: totalTokens)
-        session.buckets.add(tokens: delta, at: event.timestamp)
+      if let usage = event.usage {
+        let delta = session.accumulator.consume(usage: usage)
+        session.buckets.add(usage: delta, model: event.model, at: event.timestamp)
       }
 
       if event.primary != nil || event.secondary != nil {
@@ -93,6 +99,7 @@ public final class UsageLogIndexer {
     }
 
     session.parsedBytes = scanResult.committedOffset
+    session.scanContext = scanResult.context
     index.upsert(session)
   }
 

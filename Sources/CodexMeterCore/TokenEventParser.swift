@@ -9,7 +9,7 @@ public enum TokenEventParser {
 
   private static let dateFormatter = ISO8601DateFormatter()
 
-  public static func parse(line: Data) -> TokenUsageEvent? {
+  public static func parse(line: Data, model: String? = nil) -> TokenUsageEvent? {
     guard
       let object = try? JSONSerialization.jsonObject(with: line),
       let root = object as? [String: Any],
@@ -25,14 +25,39 @@ public enum TokenEventParser {
 
     let info = payload["info"] as? [String: Any]
     let totalUsage = info?["total_token_usage"] as? [String: Any]
-    let totalTokens = (totalUsage?["total_tokens"] as? NSNumber)?.int64Value
+    let usage = parseUsage(totalUsage)
     let rateLimits = payload["rate_limits"] as? [String: Any]
 
     return TokenUsageEvent(
       timestamp: timestamp,
-      totalTokens: totalTokens,
+      usage: usage,
+      model: model,
       primary: parseWindow(rateLimits?["primary"]),
       secondary: parseWindow(rateLimits?["secondary"])
+    )
+  }
+
+  private static func parseUsage(_ value: [String: Any]?) -> TokenUsage? {
+    guard let value else {
+      return nil
+    }
+
+    let totalTokens = (value["total_tokens"] as? NSNumber)?.int64Value
+    let inputTokens = (value["input_tokens"] as? NSNumber)?.int64Value
+    let cachedInputTokens = (value["cached_input_tokens"] as? NSNumber)?.int64Value
+    let outputTokens = (value["output_tokens"] as? NSNumber)?.int64Value
+
+    if inputTokens == nil, cachedInputTokens == nil, outputTokens == nil {
+      return totalTokens.map(TokenUsage.init(totalTokens:))
+    }
+
+    let input = inputTokens ?? cachedInputTokens ?? 0
+    let output = outputTokens ?? 0
+    return TokenUsage(
+      inputTokens: input,
+      cachedInputTokens: cachedInputTokens ?? 0,
+      outputTokens: output,
+      totalTokens: totalTokens ?? input + output
     )
   }
 

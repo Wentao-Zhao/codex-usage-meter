@@ -44,9 +44,19 @@ check(iconMetrics.capsuleHeight == 8.2, "status icon capsule height is larger")
 check(iconMetrics.lampRadius == 1.7, "status icon lamps are larger")
 check(iconMetrics.lampCenterXValues == [4.95, 9, 13.05], "status icon lamp centers stay balanced")
 
-let fixtureLine = Data(#"{"timestamp":"2026-07-01T01:02:03.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1250}},"rate_limits":{"primary":{"used_percent":24.0,"window_minutes":300,"resets_at":1782879000},"secondary":{"used_percent":36.0,"window_minutes":10080,"resets_at":1783300000}}}}"#.utf8)
-let parsedEvent = TokenEventParser.parse(line: fixtureLine)
+let fixtureLine = Data(#"{"timestamp":"2026-07-01T01:02:03.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1100,"cached_input_tokens":800,"output_tokens":150,"total_tokens":1250}},"rate_limits":{"primary":{"used_percent":24.0,"window_minutes":300,"resets_at":1782879000},"secondary":{"used_percent":36.0,"window_minutes":10080,"resets_at":1783300000}}}}"#.utf8)
+let parsedEvent = TokenEventParser.parse(line: fixtureLine, model: "gpt-5.4")
 check(parsedEvent?.totalTokens == 1_250, "parse total tokens")
+check(parsedEvent?.usage?.inputTokens == 1_100, "parse input tokens")
+check(parsedEvent?.usage?.cachedInputTokens == 800, "parse cached input tokens")
+check(parsedEvent?.usage?.uncachedInputTokens == 300, "derive uncached input tokens")
+check(parsedEvent?.usage?.outputTokens == 150, "parse output tokens")
+check(parsedEvent?.model == "gpt-5.4", "attach active model to token event")
+let fixtureCredits = CodexCreditCalculator.credits(
+  for: parsedEvent!.usage!,
+  model: parsedEvent!.model
+)
+check(abs(fixtureCredits - 0.08) < 0.000_001, "calculate official gpt-5.4 credit weighting")
 check(parsedEvent?.primary?.windowMinutes == 300, "parse five-hour window")
 check(parsedEvent?.primary?.usedPercent == 24, "parse primary usage")
 check(parsedEvent?.secondary?.windowMinutes == 10_080, "parse weekly window")
@@ -67,6 +77,26 @@ check(accumulator.consume(totalTokens: 140) == 40, "counter delta")
 check(accumulator.consume(totalTokens: 140) == 0, "duplicate counter")
 check(accumulator.consume(totalTokens: 20) == 20, "counter reset")
 
+var detailedAccumulator = SessionUsageAccumulator()
+let firstUsageDelta = detailedAccumulator.consume(
+  usage: TokenUsage(inputTokens: 1_100, cachedInputTokens: 800, outputTokens: 150, totalTokens: 1_250)
+)
+check(firstUsageDelta.totalTokens == 1_250, "first detailed counter")
+let secondUsageDelta = detailedAccumulator.consume(
+  usage: TokenUsage(inputTokens: 1_300, cachedInputTokens: 920, outputTokens: 190, totalTokens: 1_490)
+)
+check(secondUsageDelta.inputTokens == 200, "input counter delta")
+check(secondUsageDelta.cachedInputTokens == 120, "cached input counter delta")
+check(secondUsageDelta.outputTokens == 40, "output counter delta")
+check(secondUsageDelta.totalTokens == 240, "total counter delta")
+
+var evolvingAccumulator = SessionUsageAccumulator()
+_ = evolvingAccumulator.consume(totalTokens: 100)
+let newlyDetailedDelta = evolvingAccumulator.consume(
+  usage: TokenUsage(inputTokens: 90, cachedInputTokens: 50, outputTokens: 10, totalTokens: 100)
+)
+check(newlyDetailedDelta == .zero, "new breakdown fields do not create usage without total delta")
+
 var buckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
 buckets.add(tokens: 120, at: isoDate("2026-07-01T01:10:00.000Z"))
 buckets.add(tokens: 80, at: isoDate("2026-07-01T02:10:00.000Z"))
@@ -79,6 +109,18 @@ check(bucketSnapshot.hourly.count == 24, "24 hour series")
 check(bucketSnapshot.hourly[9] == 120 && bucketSnapshot.hourly[10] == 80, "local hourly buckets")
 check(bucketSnapshot.weekly.count == 7, "seven day series")
 check(bucketSnapshot.monthly.reduce(0, +) == 250, "monthly series")
+
+var detailedBuckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
+detailedBuckets.add(
+  usage: TokenUsage(inputTokens: 1_100, cachedInputTokens: 800, outputTokens: 150, totalTokens: 1_250),
+  model: "gpt-5.4",
+  at: isoDate("2026-07-01T01:10:00.000Z")
+)
+let detailedBucketSnapshot = detailedBuckets.snapshot(now: isoDate("2026-07-01T03:00:00.000Z"))
+check(detailedBucketSnapshot.allTimeUsage.uncachedInputTokens == 300, "bucket uncached input")
+check(detailedBucketSnapshot.allTimeUsage.cachedInputTokens == 800, "bucket cached input")
+check(detailedBucketSnapshot.allTimeUsage.outputTokens == 150, "bucket output")
+check(abs(detailedBucketSnapshot.allTimeCredits - 0.08) < 0.000_001, "bucket official credits")
 
 let countdownNow = isoDate("2026-07-01T03:00:00.000Z")
 let fiveHourWindow = RateLimitWindow(
@@ -262,6 +304,136 @@ check(rebuiltSnapshot.todayTotal == 200, "truncation rebuilds session contributi
 let reloadedIndexer = UsageLogIndexer(configuration: indexerConfiguration)
 let reloadedSnapshot = try reloadedIndexer.refresh(now: integrationNow, isIndexing: false)
 check(reloadedSnapshot.todayTotal == 200, "reload persisted index")
+
+let forkRoot = integrationRoot.appendingPathComponent("forked-sessions", isDirectory: true)
+let forkIndexURL = integrationRoot.appendingPathComponent("forked-usage-index.json")
+try FileManager.default.createDirectory(at: forkRoot, withIntermediateDirectories: true)
+let forkSessionURL = forkRoot.appendingPathComponent(
+  "rollout-2026-07-01T11-00-00-019f0000-1000-7000-8000-000000000001.jsonl"
+)
+let forkLines = [
+  #"{"timestamp":"2026-07-01T03:00:00.000Z","type":"session_meta","payload":{"id":"019f0000-1000-7000-8000-000000000001","session_id":"019e0000-1000-7000-8000-000000000001","forked_from_id":"019e0000-1000-7000-8000-000000000001","thread_source":"subagent","source":{"subagent":{"thread_spawn":{"parent_thread_id":"019e0000-1000-7000-8000-000000000001"}}}}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.001Z","type":"session_meta","payload":{"id":"019e0000-1000-7000-8000-000000000001","session_id":"019e0000-1000-7000-8000-000000000001","source":"vscode"}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.002Z","type":"event_msg","payload":{"type":"task_started","turn_id":"019e0000-2000-7000-8000-000000000001","started_at":1782870000}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.003Z","type":"turn_context","payload":{"model":"gpt-5.4"}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.004Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":900,"cached_input_tokens":800,"output_tokens":100,"total_tokens":1000}}}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.005Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1050,"cached_input_tokens":900,"output_tokens":150,"total_tokens":1200}}}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.005Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"primary":{"used_percent":20.0,"window_minutes":300,"resets_at":1782879000}}}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.005Z","type":"event_msg","payload":{"type":"task_started","turn_id":"019f0000-2000-7000-8000-000000000001","started_at":1782874800}}"#,
+  #"{"timestamp":"2026-07-01T03:00:00.006Z","type":"turn_context","payload":{"model":"gpt-5.4"}}"#,
+  #"{"timestamp":"2026-07-01T03:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1050,"cached_input_tokens":900,"output_tokens":150,"total_tokens":1200}}}}"#,
+  #"{"timestamp":"2026-07-01T03:00:02.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1130,"cached_input_tokens":940,"output_tokens":170,"total_tokens":1300}}}}"#,
+]
+try Data((forkLines.joined(separator: "\n") + "\n").utf8).write(to: forkSessionURL)
+let forkIndexer = UsageLogIndexer(
+  configuration: .init(
+    sessionRoots: [forkRoot],
+    indexURL: forkIndexURL,
+    timeZoneIdentifier: "Asia/Shanghai"
+  )
+)
+let forkSnapshot = try forkIndexer.refresh(now: integrationNow, isIndexing: false)
+check(forkSnapshot.todayTotal == 100, "forked session excludes copied parent history")
+check(forkSnapshot.allTimeUsage.uncachedInputTokens == 40, "forked session input delta")
+check(forkSnapshot.allTimeUsage.cachedInputTokens == 40, "forked session cached input delta")
+check(forkSnapshot.allTimeUsage.outputTokens == 20, "forked session output delta")
+check(abs(forkSnapshot.allTimeCredits - 0.01025) < 0.000_001, "forked session credit delta")
+
+let incrementalModelRoot = integrationRoot.appendingPathComponent(
+  "incremental-model-sessions",
+  isDirectory: true
+)
+try FileManager.default.createDirectory(
+  at: incrementalModelRoot,
+  withIntermediateDirectories: true
+)
+let incrementalModelURL = incrementalModelRoot.appendingPathComponent(
+  "rollout-2026-07-01T12-00-00-model-session.jsonl"
+)
+let modelContextLine = Data(
+  #"{"timestamp":"2026-07-01T04:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5.6-luna"}}"#.utf8
+)
+func detailedTokenLine(
+  input: Int64,
+  cached: Int64,
+  output: Int64,
+  total: Int64,
+  timestamp: String
+) -> Data {
+  Data(#"{"timestamp":"\#(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(input),"cached_input_tokens":\#(cached),"output_tokens":\#(output),"total_tokens":\#(total)}}}}"#.utf8)
+}
+var incrementalModelData = completeLine(modelContextLine)
+incrementalModelData.append(
+  completeLine(
+    detailedTokenLine(
+      input: 80,
+      cached: 40,
+      output: 20,
+      total: 100,
+      timestamp: "2026-07-01T04:00:01.000Z"
+    )
+  )
+)
+try incrementalModelData.write(to: incrementalModelURL)
+let incrementalModelConfiguration = UsageLogIndexer.Configuration(
+  sessionRoots: [incrementalModelRoot],
+  indexURL: integrationRoot.appendingPathComponent("incremental-model-index.json"),
+  timeZoneIdentifier: "Asia/Shanghai"
+)
+let incrementalModelIndexer = UsageLogIndexer(configuration: incrementalModelConfiguration)
+_ = try incrementalModelIndexer.refresh(now: integrationNow, isIndexing: false)
+let incrementalModelHandle = try FileHandle(forWritingTo: incrementalModelURL)
+try incrementalModelHandle.seekToEnd()
+try incrementalModelHandle.write(
+  contentsOf: completeLine(
+    detailedTokenLine(
+      input: 160,
+      cached: 80,
+      output: 40,
+      total: 200,
+      timestamp: "2026-07-01T04:00:02.000Z"
+    )
+  )
+)
+try incrementalModelHandle.close()
+let reloadedIncrementalModelIndexer = UsageLogIndexer(
+  configuration: incrementalModelConfiguration
+)
+let incrementalModelSnapshot = try reloadedIncrementalModelIndexer.refresh(
+  now: integrationNow,
+  isIndexing: false
+)
+check(
+  abs(incrementalModelSnapshot.allTimeCredits - 0.0082) < 0.000_001,
+  "incremental scan retains active model rate"
+)
+
+let stagedForkRoot = integrationRoot.appendingPathComponent("staged-fork-sessions", isDirectory: true)
+try FileManager.default.createDirectory(at: stagedForkRoot, withIntermediateDirectories: true)
+let stagedForkURL = stagedForkRoot.appendingPathComponent(
+  "rollout-2026-07-01T13-00-00-019f0000-3000-7000-8000-000000000001.jsonl"
+)
+let stagedForkHead = forkLines[0] + "\n"
+try Data(stagedForkHead.utf8).write(to: stagedForkURL)
+let stagedForkConfiguration = UsageLogIndexer.Configuration(
+  sessionRoots: [stagedForkRoot],
+  indexURL: integrationRoot.appendingPathComponent("staged-fork-index.json"),
+  timeZoneIdentifier: "Asia/Shanghai"
+)
+let stagedForkIndexer = UsageLogIndexer(configuration: stagedForkConfiguration)
+_ = try stagedForkIndexer.refresh(now: integrationNow, isIndexing: false)
+let stagedForkHandle = try FileHandle(forWritingTo: stagedForkURL)
+try stagedForkHandle.seekToEnd()
+try stagedForkHandle.write(
+  contentsOf: Data((forkLines.dropFirst().joined(separator: "\n") + "\n").utf8)
+)
+try stagedForkHandle.close()
+let reloadedStagedForkIndexer = UsageLogIndexer(configuration: stagedForkConfiguration)
+let stagedForkSnapshot = try reloadedStagedForkIndexer.refresh(
+  now: integrationNow,
+  isIndexing: false
+)
+check(stagedForkSnapshot.todayTotal == 100, "staged fork scan excludes copied parent history")
 
 let debounceQueue = DispatchQueue(label: "CodexMeterTests.debounce")
 let debounceSignal = DispatchSemaphore(value: 0)

@@ -12,7 +12,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
   private lazy var quotaStack = NSStackView(views: [primaryCard, secondaryCard])
   private let todayCard = TrendCardView()
   private let weekCard = TrendCardView()
-  private let totalCard = TrendCardView()
+  private let totalCard = UsageSummaryCardView()
 
   override init() {
     super.init()
@@ -63,6 +63,8 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     totalCard.update(
       title: "本机总量",
       total: snapshot.allTimeTotal,
+      usage: snapshot.allTimeUsage,
+      credits: snapshot.allTimeCredits,
       values: snapshot.monthly,
       startLabel: Self.monthStartLabel(snapshot.monthKeys.first),
       endLabel: "本月",
@@ -101,7 +103,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
 
     NSLayoutConstraint.activate([
       rootView.widthAnchor.constraint(equalToConstant: 320),
-      rootView.heightAnchor.constraint(equalToConstant: 352),
+      rootView.heightAnchor.constraint(equalToConstant: 382),
 
       titleLabel.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 16),
       titleLabel.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
@@ -125,13 +127,13 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
       totalCard.topAnchor.constraint(equalTo: weekCard.bottomAnchor, constant: 8),
       totalCard.leadingAnchor.constraint(equalTo: todayCard.leadingAnchor),
       totalCard.trailingAnchor.constraint(equalTo: todayCard.trailingAnchor),
-      totalCard.heightAnchor.constraint(equalToConstant: 62),
+      totalCard.heightAnchor.constraint(equalToConstant: 82),
       totalCard.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -16),
     ])
 
     let viewController = NSViewController()
     viewController.view = rootView
-    viewController.preferredContentSize = NSSize(width: 320, height: 352)
+    viewController.preferredContentSize = NSSize(width: 320, height: 382)
     popover.contentViewController = viewController
   }
 
@@ -344,6 +346,97 @@ private final class TrendCardView: CardView {
   ) {
     titleLabel.stringValue = title
     totalLabel.stringValue = TokenCountFormatter.string(from: total)
+    self.startLabel.stringValue = startLabel
+    self.endLabel.stringValue = endLabel
+    sparkline.values = values
+    sparkline.lineColor = color
+  }
+}
+
+private final class UsageSummaryCardView: CardView {
+  private let titleLabel = NSTextField(labelWithString: "--")
+  private let totalLabel = NSTextField(labelWithString: "0")
+  private let creditLabel = NSTextField(labelWithString: "等效 0 credits")
+  private let breakdownLabel = NSTextField(labelWithString: "普通输入 0 · 缓存 0 · 输出 0")
+  private let sparkline = SparklineView()
+  private let startLabel = NSTextField(labelWithString: "--")
+  private let endLabel = NSTextField(labelWithString: "--")
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+
+    titleLabel.font = .systemFont(ofSize: 9)
+    titleLabel.textColor = .secondaryLabelColor
+    totalLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
+    creditLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .medium)
+    creditLabel.textColor = .secondaryLabelColor
+    breakdownLabel.font = .systemFont(ofSize: 8)
+    breakdownLabel.textColor = .secondaryLabelColor
+    breakdownLabel.lineBreakMode = .byTruncatingTail
+    startLabel.font = .systemFont(ofSize: 8)
+    endLabel.font = .systemFont(ofSize: 8)
+    startLabel.textColor = .tertiaryLabelColor
+    endLabel.textColor = .tertiaryLabelColor
+    endLabel.alignment = .right
+
+    let metrics = NSStackView(views: [titleLabel, totalLabel, creditLabel])
+    metrics.orientation = .vertical
+    metrics.alignment = .leading
+    metrics.spacing = 1
+    metrics.translatesAutoresizingMaskIntoConstraints = false
+
+    let axis = NSStackView(views: [startLabel, endLabel])
+    axis.orientation = .horizontal
+    axis.distribution = .fill
+    axis.translatesAutoresizingMaskIntoConstraints = false
+
+    sparkline.translatesAutoresizingMaskIntoConstraints = false
+    breakdownLabel.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(metrics)
+    addSubview(sparkline)
+    addSubview(axis)
+    addSubview(breakdownLabel)
+
+    NSLayoutConstraint.activate([
+      metrics.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      metrics.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+      metrics.widthAnchor.constraint(equalToConstant: 96),
+      sparkline.leadingAnchor.constraint(equalTo: metrics.trailingAnchor, constant: 4),
+      sparkline.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      sparkline.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+      sparkline.heightAnchor.constraint(equalToConstant: 38),
+      axis.leadingAnchor.constraint(equalTo: sparkline.leadingAnchor),
+      axis.trailingAnchor.constraint(equalTo: sparkline.trailingAnchor),
+      axis.topAnchor.constraint(equalTo: sparkline.bottomAnchor, constant: -2),
+      breakdownLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      breakdownLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      breakdownLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+    ])
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  func update(
+    title: String,
+    total: Int64,
+    usage: TokenUsage,
+    credits: Double,
+    values: [Int64],
+    startLabel: String,
+    endLabel: String,
+    color: NSColor
+  ) {
+    titleLabel.stringValue = title
+    totalLabel.stringValue = TokenCountFormatter.string(from: total)
+    creditLabel.stringValue = "等效 \(CreditCountFormatter.string(from: credits)) credits"
+    let inputTokens = usage.uncachedInputTokens + usage.unclassifiedTokens
+    breakdownLabel.stringValue = [
+      "普通输入 \(TokenCountFormatter.string(from: inputTokens))",
+      "缓存 \(TokenCountFormatter.string(from: usage.cachedInputTokens))",
+      "输出 \(TokenCountFormatter.string(from: usage.outputTokens))",
+    ].joined(separator: " · ")
     self.startLabel.stringValue = startLabel
     self.endLabel.stringValue = endLabel
     sparkline.values = values

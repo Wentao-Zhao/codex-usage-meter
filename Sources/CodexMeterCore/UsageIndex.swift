@@ -8,6 +8,7 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
   public var accumulator: SessionUsageAccumulator
   public var buckets: UsageBuckets
   public var latestRateLimit: TokenUsageEvent?
+  public var scanContext: JSONLTokenScanContext
 
   public init(
     sessionID: String,
@@ -16,7 +17,8 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
     parsedBytes: UInt64,
     accumulator: SessionUsageAccumulator,
     buckets: UsageBuckets,
-    latestRateLimit: TokenUsageEvent?
+    latestRateLimit: TokenUsageEvent?,
+    scanContext: JSONLTokenScanContext = JSONLTokenScanContext()
   ) {
     self.sessionID = sessionID
     self.path = path
@@ -25,6 +27,7 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
     self.accumulator = accumulator
     self.buckets = buckets
     self.latestRateLimit = latestRateLimit
+    self.scanContext = scanContext
   }
 }
 
@@ -34,6 +37,8 @@ public struct UsageSnapshot: Equatable, Sendable {
   public let todayTotal: Int64
   public let weekTotal: Int64
   public let allTimeTotal: Int64
+  public let allTimeUsage: TokenUsage
+  public let allTimeCredits: Double
   public let hourly: [Int64]
   public let weekly: [Int64]
   public let monthly: [Int64]
@@ -50,7 +55,7 @@ public struct UsageSnapshot: Equatable, Sendable {
 }
 
 public struct UsageIndex: Codable, Equatable, Sendable {
-  public static let currentVersion = 1
+  public static let currentVersion = 4
 
   public var version: Int
   public var timeZoneIdentifier: String
@@ -101,6 +106,8 @@ public struct UsageIndex: Codable, Equatable, Sendable {
       todayTotal: bucketSnapshot.todayTotal,
       weekTotal: bucketSnapshot.weekTotal,
       allTimeTotal: bucketSnapshot.allTimeTotal,
+      allTimeUsage: bucketSnapshot.allTimeUsage,
+      allTimeCredits: bucketSnapshot.allTimeCredits,
       hourly: bucketSnapshot.hourly,
       weekly: bucketSnapshot.weekly,
       monthly: bucketSnapshot.monthly,

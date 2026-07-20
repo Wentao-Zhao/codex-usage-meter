@@ -1,21 +1,30 @@
 import Foundation
 
 public struct SessionUsageAccumulator: Codable, Equatable, Sendable {
-  public private(set) var lastTotalTokens: Int64?
+  public private(set) var lastUsage: TokenUsage?
 
-  public init(lastTotalTokens: Int64? = nil) {
-    self.lastTotalTokens = lastTotalTokens
+  public var lastTotalTokens: Int64? {
+    lastUsage?.totalTokens
+  }
+
+  public init(lastUsage: TokenUsage? = nil) {
+    self.lastUsage = lastUsage
+  }
+
+  public init(lastTotalTokens: Int64?) {
+    self.lastUsage = lastTotalTokens.map(TokenUsage.init(totalTokens:))
   }
 
   public mutating func consume(totalTokens: Int64) -> Int64 {
-    defer { lastTotalTokens = totalTokens }
+    consume(usage: TokenUsage(totalTokens: totalTokens)).totalTokens
+  }
 
-    guard let previous = lastTotalTokens else {
-      return max(0, totalTokens)
+  public mutating func consume(usage: TokenUsage) -> TokenUsage {
+    defer { lastUsage = usage }
+
+    guard let previous = lastUsage else {
+      return usage
     }
-    guard totalTokens >= previous else {
-      return max(0, totalTokens)
-    }
-    return totalTokens - previous
+    return usage.delta(from: previous)
   }
 }
