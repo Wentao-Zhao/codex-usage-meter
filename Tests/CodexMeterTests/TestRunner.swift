@@ -144,6 +144,27 @@ check(plainCount == "999", "plain token count: \(plainCount)")
 check(thousandCount == "1.2K", "thousand token count: \(thousandCount)")
 check(millionCount == "2.84M", "million token count: \(millionCount)")
 
+check(
+  UsageComparison.resolve(current: 118, previous: 100) == .increased(percent: 18),
+  "comparison reports increase"
+)
+check(
+  UsageComparison.resolve(current: 91, previous: 100) == .decreased(percent: 9),
+  "comparison reports decrease"
+)
+check(
+  UsageComparison.resolve(current: 100, previous: 100) == .unchanged,
+  "comparison reports unchanged"
+)
+check(
+  UsageComparison.resolve(current: 10, previous: 0) == .added,
+  "comparison reports newly added usage"
+)
+check(
+  UsageComparison.resolve(current: 0, previous: 0) == .empty,
+  "comparison reports empty periods"
+)
+
 var firstSessionBuckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
 firstSessionBuckets.add(tokens: 120, at: countdownNow)
 var secondSessionBuckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
