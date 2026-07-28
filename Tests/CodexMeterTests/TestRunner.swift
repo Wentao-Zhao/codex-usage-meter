@@ -105,10 +105,29 @@ let bucketSnapshot = buckets.snapshot(now: isoDate("2026-07-01T03:00:00.000Z"))
 check(bucketSnapshot.todayTotal == 200, "today total")
 check(bucketSnapshot.weekTotal == 250, "week total starts Monday")
 check(bucketSnapshot.allTimeTotal == 250, "all-time total")
-check(bucketSnapshot.hourly.count == 24, "24 hour series")
+check(bucketSnapshot.hourly.count == 12, "hour series stops at current local hour")
 check(bucketSnapshot.hourly[9] == 120 && bucketSnapshot.hourly[10] == 80, "local hourly buckets")
-check(bucketSnapshot.weekly.count == 7, "seven day series")
+check(bucketSnapshot.weekly.count == 3, "week series stops at current local weekday")
 check(bucketSnapshot.monthly.reduce(0, +) == 250, "monthly series")
+
+let comparisonNow = isoDate("2026-07-29T02:30:00.000Z")
+var comparisonBuckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
+comparisonBuckets.add(tokens: 30, at: isoDate("2026-07-29T01:10:00.000Z"))
+comparisonBuckets.add(tokens: 20, at: isoDate("2026-07-28T01:10:00.000Z"))
+comparisonBuckets.add(tokens: 40, at: isoDate("2026-07-22T01:10:00.000Z"))
+let comparisonSnapshot = comparisonBuckets.snapshot(now: comparisonNow)
+check(comparisonSnapshot.hourly.count == 11, "today series stops at current hour")
+check(
+  comparisonSnapshot.previousDayHourly.count == 11,
+  "yesterday series matches current hour range"
+)
+check(comparisonSnapshot.previousDayTotal == 20, "previous day total uses same hour range")
+check(comparisonSnapshot.weekly.count == 3, "week series stops at current weekday")
+check(
+  comparisonSnapshot.previousWeekDaily.count == 3,
+  "previous week series matches current weekday range"
+)
+check(comparisonSnapshot.previousWeekTotal == 40, "previous week total uses same weekday range")
 
 var detailedBuckets = UsageBuckets(timeZoneIdentifier: "Asia/Shanghai")
 detailedBuckets.add(

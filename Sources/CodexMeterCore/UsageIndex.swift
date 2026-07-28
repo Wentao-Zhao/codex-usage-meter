@@ -35,12 +35,16 @@ public struct UsageSnapshot: Equatable, Sendable {
   public let generatedAt: Date
   public let isIndexing: Bool
   public let todayTotal: Int64
+  public let previousDayTotal: Int64
   public let weekTotal: Int64
+  public let previousWeekTotal: Int64
   public let allTimeTotal: Int64
   public let allTimeUsage: TokenUsage
   public let allTimeCredits: Double
   public let hourly: [Int64]
+  public let previousDayHourly: [Int64]
   public let weekly: [Int64]
+  public let previousWeekDaily: [Int64]
   public let monthly: [Int64]
   public let monthKeys: [String]
   public let fiveHourLimit: RateLimitWindow?
@@ -104,12 +108,16 @@ public struct UsageIndex: Codable, Equatable, Sendable {
       generatedAt: now,
       isIndexing: isIndexing,
       todayTotal: bucketSnapshot.todayTotal,
+      previousDayTotal: bucketSnapshot.previousDayTotal,
       weekTotal: bucketSnapshot.weekTotal,
+      previousWeekTotal: bucketSnapshot.previousWeekTotal,
       allTimeTotal: bucketSnapshot.allTimeTotal,
       allTimeUsage: bucketSnapshot.allTimeUsage,
       allTimeCredits: bucketSnapshot.allTimeCredits,
       hourly: bucketSnapshot.hourly,
+      previousDayHourly: bucketSnapshot.previousDayHourly,
       weekly: bucketSnapshot.weekly,
+      previousWeekDaily: bucketSnapshot.previousWeekDaily,
       monthly: bucketSnapshot.monthly,
       monthKeys: bucketSnapshot.monthKeys,
       fiveHourLimit: resolvedRateLimits?.fiveHour,
