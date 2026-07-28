@@ -10,8 +10,16 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
   private let primaryCard = QuotaCardView()
   private let secondaryCard = QuotaCardView()
   private lazy var quotaStack = NSStackView(views: [primaryCard, secondaryCard])
-  private let todayCard = TrendCardView()
-  private let weekCard = TrendCardView()
+  private let todayCard = ComparisonMetricCardView(
+    title: "今日消耗",
+    accentColor: StatusDotIcon.color(for: .green),
+    style: .line
+  )
+  private let weekCard = ComparisonMetricCardView(
+    title: "本周消耗",
+    accentColor: NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1),
+    style: .bars
+  )
   private let totalCard = UsageSummaryCardView()
 
   override init() {
@@ -45,30 +53,35 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     secondaryCard.update(window: snapshot.weeklyLimit, now: now, kind: .weekly)
 
     todayCard.update(
-      title: "今日消耗",
       total: snapshot.todayTotal,
-      values: snapshot.hourly,
+      currentValues: snapshot.hourly,
+      previousValues: snapshot.previousDayHourly,
+      comparison: UsageComparison.resolve(
+        current: snapshot.todayTotal,
+        previous: snapshot.previousDayTotal
+      ),
+      comparisonPeriod: "昨日",
+      currentPeriod: "今日",
       startLabel: "00 时",
-      endLabel: "现在",
-      color: StatusDotIcon.color(for: .green)
+      endLabel: "现在"
     )
     weekCard.update(
-      title: "本周消耗",
       total: snapshot.weekTotal,
-      values: snapshot.weekly,
+      currentValues: snapshot.weekly,
+      previousValues: snapshot.previousWeekDaily,
+      comparison: UsageComparison.resolve(
+        current: snapshot.weekTotal,
+        previous: snapshot.previousWeekTotal
+      ),
+      comparisonPeriod: "上周",
+      currentPeriod: "本周",
       startLabel: "周一",
-      endLabel: "今天",
-      color: NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1)
+      endLabel: "今天"
     )
     totalCard.update(
-      title: "本机总量",
       total: snapshot.allTimeTotal,
       usage: snapshot.allTimeUsage,
-      credits: snapshot.allTimeCredits,
-      values: snapshot.monthly,
-      startLabel: Self.monthStartLabel(snapshot.monthKeys.first),
-      endLabel: "本月",
-      color: NSColor(calibratedRed: 0.68, green: 0.57, blue: 0.75, alpha: 1)
+      credits: snapshot.allTimeCredits
     )
 
     updatedLabel.stringValue = Self.updateText(for: snapshot, now: now)
@@ -103,7 +116,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
 
     NSLayoutConstraint.activate([
       rootView.widthAnchor.constraint(equalToConstant: 320),
-      rootView.heightAnchor.constraint(equalToConstant: 382),
+      rootView.heightAnchor.constraint(equalToConstant: 444),
 
       titleLabel.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 16),
       titleLabel.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
@@ -119,21 +132,21 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
       todayCard.topAnchor.constraint(equalTo: quotaStack.bottomAnchor, constant: 10),
       todayCard.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
       todayCard.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
-      todayCard.heightAnchor.constraint(equalToConstant: 62),
+      todayCard.heightAnchor.constraint(equalToConstant: 82),
       weekCard.topAnchor.constraint(equalTo: todayCard.bottomAnchor, constant: 8),
       weekCard.leadingAnchor.constraint(equalTo: todayCard.leadingAnchor),
       weekCard.trailingAnchor.constraint(equalTo: todayCard.trailingAnchor),
-      weekCard.heightAnchor.constraint(equalToConstant: 62),
+      weekCard.heightAnchor.constraint(equalToConstant: 82),
       totalCard.topAnchor.constraint(equalTo: weekCard.bottomAnchor, constant: 8),
       totalCard.leadingAnchor.constraint(equalTo: todayCard.leadingAnchor),
       totalCard.trailingAnchor.constraint(equalTo: todayCard.trailingAnchor),
-      totalCard.heightAnchor.constraint(equalToConstant: 82),
+      totalCard.heightAnchor.constraint(equalToConstant: 104),
       totalCard.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -16),
     ])
 
     let viewController = NSViewController()
     viewController.view = rootView
-    viewController.preferredContentSize = NSSize(width: 320, height: 382)
+    viewController.preferredContentSize = NSSize(width: 320, height: 444)
     popover.contentViewController = viewController
   }
 
@@ -154,12 +167,6 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     return "额度数据待更新"
   }
 
-  private static func monthStartLabel(_ key: String?) -> String {
-    guard let key, let month = key.split(separator: "-").last else {
-      return "首月"
-    }
-    return "\(month) 月"
-  }
 }
 
 private class CardView: NSView {
@@ -174,6 +181,101 @@ private class CardView: NSView {
 
   required init?(coder: NSCoder) {
     nil
+  }
+}
+
+private final class SectionLabelView: NSView {
+  private let accent = NSView()
+  private let label = NSTextField(labelWithString: "")
+
+  var title: String {
+    get { label.stringValue }
+    set {
+      label.stringValue = newValue
+      invalidateIntrinsicContentSize()
+    }
+  }
+
+  override var intrinsicContentSize: NSSize {
+    NSSize(
+      width: label.intrinsicContentSize.width + 9,
+      height: max(11, label.intrinsicContentSize.height)
+    )
+  }
+
+  init(title: String, accentColor: NSColor) {
+    super.init(frame: .zero)
+
+    label.stringValue = title
+    label.font = .systemFont(ofSize: 9, weight: .medium)
+    label.textColor = NSColor.secondaryLabelColor.withAlphaComponent(0.78)
+
+    accent.wantsLayer = true
+    accent.layer?.cornerRadius = 1.5
+    accent.layer?.backgroundColor = accentColor.withAlphaComponent(0.82).cgColor
+
+    [accent, label].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
+
+    NSLayoutConstraint.activate([
+      accent.leadingAnchor.constraint(equalTo: leadingAnchor),
+      accent.centerYAnchor.constraint(equalTo: centerYAnchor),
+      accent.widthAnchor.constraint(equalToConstant: 3),
+      accent.heightAnchor.constraint(equalToConstant: 9),
+      label.leadingAnchor.constraint(equalTo: accent.trailingAnchor, constant: 6),
+      label.trailingAnchor.constraint(equalTo: trailingAnchor),
+      label.centerYAnchor.constraint(equalTo: centerYAnchor),
+    ])
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  func setAccentColor(_ color: NSColor) {
+    accent.layer?.backgroundColor = color.withAlphaComponent(0.82).cgColor
+  }
+}
+
+private final class ComparisonBadgeView: NSView {
+  private let label = NSTextField(labelWithString: "")
+
+  override var intrinsicContentSize: NSSize {
+    NSSize(
+      width: label.intrinsicContentSize.width + 12,
+      height: label.intrinsicContentSize.height + 4
+    )
+  }
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+
+    wantsLayer = true
+    layer?.cornerRadius = 8
+    label.font = .systemFont(ofSize: 8, weight: .semibold)
+    label.alignment = .center
+    label.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(label)
+
+    NSLayoutConstraint.activate([
+      label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+      label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+      label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+      label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+    ])
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  func update(text: String, tint: NSColor) {
+    label.stringValue = text
+    label.textColor = tint
+    layer?.backgroundColor = tint.withAlphaComponent(0.10).cgColor
+    invalidateIntrinsicContentSize()
   }
 }
 
@@ -207,7 +309,10 @@ private final class ProgressBarView: NSView {
 
 private final class QuotaCardView: CardView {
   private let contentView = NSView()
-  private let titleLabel = NSTextField(labelWithString: "--")
+  private let titleView = SectionLabelView(
+    title: "--",
+    accentColor: NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1)
+  )
   private let percentLabel = NSTextField(labelWithString: "--")
   private let countdownLabel = NSTextField(labelWithString: "暂无额度数据")
   private let progress = ProgressBarView()
@@ -215,8 +320,6 @@ private final class QuotaCardView: CardView {
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
 
-    titleLabel.font = .systemFont(ofSize: 10)
-    titleLabel.textColor = .secondaryLabelColor
     percentLabel.font = .systemFont(ofSize: 20, weight: .semibold)
     countdownLabel.font = .systemFont(ofSize: 9)
     countdownLabel.textColor = .secondaryLabelColor
@@ -225,7 +328,7 @@ private final class QuotaCardView: CardView {
     contentView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(contentView)
 
-    [titleLabel, percentLabel, countdownLabel, progress].forEach {
+    [titleView, percentLabel, countdownLabel, progress].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
       contentView.addSubview($0)
     }
@@ -235,13 +338,13 @@ private final class QuotaCardView: CardView {
       contentView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
       contentView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 3),
 
-      titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor),
-      titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-      percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
+      titleView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      titleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      percentLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
       percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-      titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: percentLabel.leadingAnchor, constant: -8),
+      titleView.trailingAnchor.constraint(lessThanOrEqualTo: percentLabel.leadingAnchor, constant: -8),
 
-      countdownLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
+      countdownLabel.topAnchor.constraint(equalTo: titleView.bottomAnchor, constant: 10),
       countdownLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       countdownLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
@@ -258,10 +361,12 @@ private final class QuotaCardView: CardView {
   }
 
   func update(window: RateLimitWindow?, now: Date, kind: RateLimitKind) {
-    titleLabel.stringValue = kind == .weekly ? "本周剩余" : "5 小时剩余"
-    progress.fillColor = kind == .weekly
+    let color = kind == .weekly
       ? NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1)
       : StatusDotIcon.color(for: .green)
+    titleView.title = kind == .weekly ? "本周剩余" : "5 小时剩余"
+    titleView.setAccentColor(color)
+    progress.fillColor = color
     guard let window else {
       percentLabel.stringValue = "--"
       countdownLabel.stringValue = "暂无额度数据"
@@ -283,52 +388,71 @@ private final class QuotaCardView: CardView {
   }
 }
 
-private final class TrendCardView: CardView {
-  private let titleLabel = NSTextField(labelWithString: "--")
+private final class ComparisonMetricCardView: CardView {
+  enum Style {
+    case line
+    case bars
+  }
+
+  private let style: Style
+  private let accentColor: NSColor
+  private let titleView: SectionLabelView
+  private let badgeView = ComparisonBadgeView()
   private let totalLabel = NSTextField(labelWithString: "0")
-  private let sparkline = SparklineView()
+  private let periodLabel = NSTextField(labelWithString: "--")
+  private let lineChart = ComparisonLineChartView()
+  private let barChart = GroupedBarChartView()
   private let startLabel = NSTextField(labelWithString: "--")
   private let endLabel = NSTextField(labelWithString: "--")
 
-  override init(frame frameRect: NSRect) {
-    super.init(frame: frameRect)
+  private var chartView: NSView {
+    style == .line ? lineChart : barChart
+  }
 
-    titleLabel.font = .systemFont(ofSize: 9)
-    titleLabel.textColor = .secondaryLabelColor
-    totalLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
+  init(title: String, accentColor: NSColor, style: Style) {
+    self.style = style
+    self.accentColor = accentColor
+    self.titleView = SectionLabelView(title: title, accentColor: accentColor)
+    super.init(frame: .zero)
+
+    totalLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+    periodLabel.font = .systemFont(ofSize: 8)
+    periodLabel.textColor = .tertiaryLabelColor
     startLabel.font = .systemFont(ofSize: 8)
     endLabel.font = .systemFont(ofSize: 8)
     startLabel.textColor = .tertiaryLabelColor
     endLabel.textColor = .tertiaryLabelColor
     endLabel.alignment = .right
 
-    let metrics = NSStackView(views: [titleLabel, totalLabel])
-    metrics.orientation = .vertical
-    metrics.alignment = .leading
-    metrics.spacing = 2
-    metrics.translatesAutoresizingMaskIntoConstraints = false
+    lineChart.lineColor = accentColor
+    barChart.barColor = accentColor
 
-    let axis = NSStackView(views: [startLabel, endLabel])
-    axis.orientation = .horizontal
-    axis.distribution = .fill
-    axis.translatesAutoresizingMaskIntoConstraints = false
-
-    sparkline.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(metrics)
-    addSubview(sparkline)
-    addSubview(axis)
+    [titleView, badgeView, totalLabel, periodLabel, chartView, startLabel, endLabel].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
 
     NSLayoutConstraint.activate([
-      metrics.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-      metrics.centerYAnchor.constraint(equalTo: centerYAnchor),
-      metrics.widthAnchor.constraint(equalToConstant: 96),
-      sparkline.leadingAnchor.constraint(equalTo: metrics.trailingAnchor, constant: 4),
-      sparkline.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      sparkline.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-      sparkline.heightAnchor.constraint(equalToConstant: 38),
-      axis.leadingAnchor.constraint(equalTo: sparkline.leadingAnchor),
-      axis.trailingAnchor.constraint(equalTo: sparkline.trailingAnchor),
-      axis.topAnchor.constraint(equalTo: sparkline.bottomAnchor, constant: -2),
+      titleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      titleView.topAnchor.constraint(equalTo: topAnchor, constant: 9),
+      badgeView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      badgeView.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
+      titleView.trailingAnchor.constraint(lessThanOrEqualTo: badgeView.leadingAnchor, constant: -6),
+
+      totalLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      totalLabel.topAnchor.constraint(equalTo: titleView.bottomAnchor, constant: 7),
+      periodLabel.leadingAnchor.constraint(equalTo: totalLabel.leadingAnchor),
+      periodLabel.topAnchor.constraint(equalTo: totalLabel.bottomAnchor, constant: 2),
+
+      chartView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 104),
+      chartView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      chartView.topAnchor.constraint(equalTo: topAnchor, constant: 29),
+      chartView.heightAnchor.constraint(equalToConstant: style == .bars ? 32 : 34),
+      startLabel.leadingAnchor.constraint(equalTo: chartView.leadingAnchor),
+      startLabel.topAnchor.constraint(equalTo: chartView.bottomAnchor, constant: 4),
+      endLabel.trailingAnchor.constraint(equalTo: chartView.trailingAnchor),
+      endLabel.centerYAnchor.constraint(equalTo: startLabel.centerYAnchor),
+      startLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -5),
     ])
   }
 
@@ -337,80 +461,187 @@ private final class TrendCardView: CardView {
   }
 
   func update(
-    title: String,
     total: Int64,
-    values: [Int64],
+    currentValues: [Int64],
+    previousValues: [Int64],
+    comparison: UsageComparisonState,
+    comparisonPeriod: String,
+    currentPeriod: String,
     startLabel: String,
-    endLabel: String,
-    color: NSColor
+    endLabel: String
   ) {
-    titleLabel.stringValue = title
     totalLabel.stringValue = TokenCountFormatter.string(from: total)
+    periodLabel.stringValue = style == .line ? "当前累计" : "周一至今"
     self.startLabel.stringValue = startLabel
     self.endLabel.stringValue = endLabel
-    sparkline.values = values
-    sparkline.lineColor = color
+    badgeView.update(
+      text: Self.comparisonText(
+        comparison,
+        comparisonPeriod: comparisonPeriod,
+        currentPeriod: currentPeriod
+      ),
+      tint: Self.comparisonTint(comparison, accentColor: accentColor)
+    )
+
+    lineChart.currentValues = currentValues
+    lineChart.previousValues = previousValues
+    barChart.currentValues = currentValues
+    barChart.previousValues = previousValues
+  }
+
+  private static func comparisonText(
+    _ comparison: UsageComparisonState,
+    comparisonPeriod: String,
+    currentPeriod: String
+  ) -> String {
+    switch comparison {
+    case .empty:
+      return "暂无消耗"
+    case .added:
+      return "\(currentPeriod)新增"
+    case .unchanged:
+      return "与\(comparisonPeriod)持平"
+    case .increased(let percent):
+      return "↑ \(percent)% 较\(comparisonPeriod)"
+    case .decreased(let percent):
+      return "↓ \(percent)% 较\(comparisonPeriod)"
+    }
+  }
+
+  private static func comparisonTint(
+    _ comparison: UsageComparisonState,
+    accentColor: NSColor
+  ) -> NSColor {
+    switch comparison {
+    case .empty, .unchanged:
+      return .secondaryLabelColor
+    case .added, .increased:
+      return accentColor
+    case .decreased:
+      return NSColor(calibratedRed: 0.56, green: 0.68, blue: 0.80, alpha: 1)
+    }
+  }
+}
+
+private final class CompositionRowView: NSView {
+  private let swatch = NSView()
+  private let nameLabel = NSTextField(labelWithString: "")
+  private let valueLabel = NSTextField(labelWithString: "0")
+  private let percentLabel = NSTextField(labelWithString: "0%")
+
+  init(name: String, color: NSColor) {
+    super.init(frame: .zero)
+
+    swatch.wantsLayer = true
+    swatch.layer?.cornerRadius = 2
+    swatch.layer?.backgroundColor = color.cgColor
+    nameLabel.stringValue = name
+    nameLabel.font = .systemFont(ofSize: 8)
+    nameLabel.textColor = .secondaryLabelColor
+    valueLabel.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+    valueLabel.alignment = .right
+    percentLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
+    percentLabel.textColor = .tertiaryLabelColor
+    percentLabel.alignment = .right
+
+    [swatch, nameLabel, valueLabel, percentLabel].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
+
+    NSLayoutConstraint.activate([
+      heightAnchor.constraint(equalToConstant: 17),
+      swatch.leadingAnchor.constraint(equalTo: leadingAnchor),
+      swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
+      swatch.widthAnchor.constraint(equalToConstant: 7),
+      swatch.heightAnchor.constraint(equalToConstant: 7),
+      nameLabel.leadingAnchor.constraint(equalTo: swatch.trailingAnchor, constant: 7),
+      nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 6),
+      valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      valueLabel.widthAnchor.constraint(equalToConstant: 46),
+      percentLabel.leadingAnchor.constraint(equalTo: valueLabel.trailingAnchor, constant: 5),
+      percentLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+      percentLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      percentLabel.widthAnchor.constraint(equalToConstant: 25),
+    ])
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  func update(value: Int64, fraction: Double) {
+    valueLabel.stringValue = TokenCountFormatter.string(from: value)
+    percentLabel.stringValue = "\(Int((fraction * 100).rounded()))%"
   }
 }
 
 private final class UsageSummaryCardView: CardView {
-  private let titleLabel = NSTextField(labelWithString: "--")
+  private let titleView = SectionLabelView(
+    title: "本机总量",
+    accentColor: NSColor(calibratedRed: 0.68, green: 0.57, blue: 0.75, alpha: 1)
+  )
   private let totalLabel = NSTextField(labelWithString: "0")
-  private let creditLabel = NSTextField(labelWithString: "等效 0 credits")
-  private let breakdownLabel = NSTextField(labelWithString: "普通输入 0 · 缓存 0 · 输出 0")
-  private let sparkline = SparklineView()
-  private let startLabel = NSTextField(labelWithString: "--")
-  private let endLabel = NSTextField(labelWithString: "--")
+  private let totalCaptionLabel = NSTextField(labelWithString: "全部 Token")
+  private let creditLabel = NSTextField(labelWithString: "≈ 0 credits")
+  private let ringView = TokenCompositionRingView()
+  private let inputRow = CompositionRowView(
+    name: "普通输入",
+    color: TokenCompositionRingView.uncachedInputColor
+  )
+  private let cacheRow = CompositionRowView(
+    name: "缓存输入",
+    color: TokenCompositionRingView.cachedInputColor
+  )
+  private let outputRow = CompositionRowView(
+    name: "输出",
+    color: TokenCompositionRingView.outputColor
+  )
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
 
-    titleLabel.font = .systemFont(ofSize: 9)
-    titleLabel.textColor = .secondaryLabelColor
-    totalLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-    creditLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .medium)
+    totalLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+    totalLabel.alignment = .center
+    totalCaptionLabel.font = .systemFont(ofSize: 7)
+    totalCaptionLabel.textColor = .tertiaryLabelColor
+    totalCaptionLabel.alignment = .center
+    creditLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
     creditLabel.textColor = .secondaryLabelColor
-    breakdownLabel.font = .systemFont(ofSize: 8)
-    breakdownLabel.textColor = .secondaryLabelColor
-    breakdownLabel.lineBreakMode = .byTruncatingTail
-    startLabel.font = .systemFont(ofSize: 8)
-    endLabel.font = .systemFont(ofSize: 8)
-    startLabel.textColor = .tertiaryLabelColor
-    endLabel.textColor = .tertiaryLabelColor
-    endLabel.alignment = .right
 
-    let metrics = NSStackView(views: [titleLabel, totalLabel, creditLabel])
-    metrics.orientation = .vertical
-    metrics.alignment = .leading
-    metrics.spacing = 1
-    metrics.translatesAutoresizingMaskIntoConstraints = false
+    let centerStack = NSStackView(views: [totalLabel, totalCaptionLabel])
+    centerStack.orientation = .vertical
+    centerStack.alignment = .centerX
+    centerStack.spacing = 1
 
-    let axis = NSStackView(views: [startLabel, endLabel])
-    axis.orientation = .horizontal
-    axis.distribution = .fill
-    axis.translatesAutoresizingMaskIntoConstraints = false
+    let rows = NSStackView(views: [inputRow, cacheRow, outputRow])
+    rows.orientation = .vertical
+    rows.alignment = .width
+    rows.spacing = 3
 
-    sparkline.translatesAutoresizingMaskIntoConstraints = false
-    breakdownLabel.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(metrics)
-    addSubview(sparkline)
-    addSubview(axis)
-    addSubview(breakdownLabel)
+    [titleView, creditLabel, ringView, centerStack, rows].forEach {
+      $0.translatesAutoresizingMaskIntoConstraints = false
+      addSubview($0)
+    }
 
     NSLayoutConstraint.activate([
-      metrics.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-      metrics.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-      metrics.widthAnchor.constraint(equalToConstant: 96),
-      sparkline.leadingAnchor.constraint(equalTo: metrics.trailingAnchor, constant: 4),
-      sparkline.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      sparkline.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-      sparkline.heightAnchor.constraint(equalToConstant: 38),
-      axis.leadingAnchor.constraint(equalTo: sparkline.leadingAnchor),
-      axis.trailingAnchor.constraint(equalTo: sparkline.trailingAnchor),
-      axis.topAnchor.constraint(equalTo: sparkline.bottomAnchor, constant: -2),
-      breakdownLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-      breakdownLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      breakdownLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+      titleView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      titleView.topAnchor.constraint(equalTo: topAnchor, constant: 9),
+      creditLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      creditLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
+
+      ringView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      ringView.topAnchor.constraint(equalTo: topAnchor, constant: 28),
+      ringView.widthAnchor.constraint(equalToConstant: 64),
+      ringView.heightAnchor.constraint(equalToConstant: 64),
+      centerStack.centerXAnchor.constraint(equalTo: ringView.centerXAnchor),
+      centerStack.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
+      centerStack.widthAnchor.constraint(lessThanOrEqualTo: ringView.widthAnchor, constant: -8),
+
+      rows.leadingAnchor.constraint(equalTo: ringView.trailingAnchor, constant: 12),
+      rows.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      rows.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
     ])
   }
 
@@ -419,27 +650,17 @@ private final class UsageSummaryCardView: CardView {
   }
 
   func update(
-    title: String,
     total: Int64,
     usage: TokenUsage,
-    credits: Double,
-    values: [Int64],
-    startLabel: String,
-    endLabel: String,
-    color: NSColor
+    credits: Double
   ) {
-    titleLabel.stringValue = title
     totalLabel.stringValue = TokenCountFormatter.string(from: total)
-    creditLabel.stringValue = "等效 \(CreditCountFormatter.string(from: credits)) credits"
+    creditLabel.stringValue = "≈ \(CreditCountFormatter.string(from: credits)) credits"
     let inputTokens = usage.uncachedInputTokens + usage.unclassifiedTokens
-    breakdownLabel.stringValue = [
-      "普通输入 \(TokenCountFormatter.string(from: inputTokens))",
-      "缓存 \(TokenCountFormatter.string(from: usage.cachedInputTokens))",
-      "输出 \(TokenCountFormatter.string(from: usage.outputTokens))",
-    ].joined(separator: " · ")
-    self.startLabel.stringValue = startLabel
-    self.endLabel.stringValue = endLabel
-    sparkline.values = values
-    sparkline.lineColor = color
+    let composition = UsageChartGeometry.composition(usage: usage)
+    ringView.usage = usage
+    inputRow.update(value: inputTokens, fraction: composition.uncachedInput)
+    cacheRow.update(value: usage.cachedInputTokens, fraction: composition.cachedInput)
+    outputRow.update(value: usage.outputTokens, fraction: composition.output)
   }
 }
