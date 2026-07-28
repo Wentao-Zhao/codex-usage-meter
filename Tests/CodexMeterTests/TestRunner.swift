@@ -159,9 +159,11 @@ check(RateLimitPolicy.isStale(fiveHourWindow, now: fiveHourWindow.resetsAt) == t
 let plainCount = TokenCountFormatter.string(from: 999)
 let thousandCount = TokenCountFormatter.string(from: 1_200)
 let millionCount = TokenCountFormatter.string(from: 2_840_000)
+let billionCount = TokenCountFormatter.string(from: 2_767_570_000)
 check(plainCount == "999", "plain token count: \(plainCount)")
 check(thousandCount == "1.2K", "thousand token count: \(thousandCount)")
 check(millionCount == "2.84M", "million token count: \(millionCount)")
+check(billionCount == "2.77B", "billion token count: \(billionCount)")
 
 check(
   UsageComparison.resolve(current: 118, previous: 100) == .increased(percent: 18),

@@ -231,6 +231,9 @@ public struct UsageBuckets: Codable, Equatable, Sendable {
 
 public enum TokenCountFormatter {
   public static func string(from tokens: Int64) -> String {
+    if tokens >= 1_000_000_000 {
+      return compact(Double(tokens) / 1_000_000_000, fractionDigits: 2) + "B"
+    }
     if tokens >= 1_000_000 {
       return compact(Double(tokens) / 1_000_000, fractionDigits: 2) + "M"
     }
