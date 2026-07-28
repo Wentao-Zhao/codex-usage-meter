@@ -504,6 +504,53 @@ check(twoSparklinePoints == [
   SparklinePoint(x: 1, y: 1),
 ], "sparkline normalized range")
 
+let comparisonGeometry = UsageChartGeometry.lines(
+  current: [0, 20, 40],
+  previous: [0, 50, 100]
+)
+check(
+  abs((comparisonGeometry.current.last?.y ?? 0) - 0.4) < 0.000_001,
+  "line series share one maximum"
+)
+check(
+  comparisonGeometry.previous.last?.y == 1,
+  "previous line reaches shared maximum"
+)
+
+let groupedBars = UsageChartGeometry.bars(
+  current: [40, 100],
+  previous: [80, 50]
+)
+check(
+  groupedBars == [
+    GroupedBarFraction(current: 0.4, previous: 0.8),
+    GroupedBarFraction(current: 1, previous: 0.5),
+  ],
+  "bar pairs preserve a shared scale"
+)
+
+let composition = UsageChartGeometry.composition(
+  usage: TokenUsage(
+    inputTokens: 95,
+    cachedInputTokens: 71,
+    outputTokens: 5,
+    totalTokens: 100
+  )
+)
+check(
+  abs(composition.uncachedInput - 0.24) < 0.000_001,
+  "composition uncached input"
+)
+check(
+  abs(composition.cachedInput - 0.71) < 0.000_001,
+  "composition cached input"
+)
+check(abs(composition.output - 0.05) < 0.000_001, "composition output")
+check(
+  UsageChartGeometry.composition(usage: .zero) == .zero,
+  "empty usage returns an empty composition"
+)
+
 let eventMonitorRoot = integrationRoot.appendingPathComponent("event-monitor", isDirectory: true)
 try FileManager.default.createDirectory(at: eventMonitorRoot, withIntermediateDirectories: true)
 let eventMonitorSignal = DispatchSemaphore(value: 0)
