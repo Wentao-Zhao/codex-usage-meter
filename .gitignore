@@ -3,6 +3,7 @@
 .swiftpm/
 .swift-home/
 .superpowers/
+.worktrees/
 design/
 Resources/AppIcon.iconset/
 dist/
