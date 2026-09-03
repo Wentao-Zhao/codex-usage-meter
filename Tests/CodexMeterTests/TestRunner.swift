@@ -71,6 +71,30 @@ check(weeklyOnlyEvent?.resolvedRateLimits.fiveHour == nil, "weekly-only payload 
 check(weeklyOnlyEvent?.resolvedRateLimits.weekly?.usedPercent == 16, "resolve weekly limit when it moves to primary")
 check(weeklyOnlyEvent?.resolvedRateLimits.statusKind == .weekly, "weekly limit drives status when five-hour limit is absent")
 
+let accountRateLimitsFixture = Data(#"{"id":2,"result":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788415604},"secondary":{"usedPercent":61,"windowDurationMins":10080,"resetsAt":1788748168}},"rateLimitsByLimitId":{"base_model_inference":{"limitId":"base_model_inference","limitName":"gpt-reserve","primary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":1789004183},"secondary":null},"codex":{"limitId":"codex","limitName":null,"primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788415604},"secondary":{"usedPercent":61,"windowDurationMins":10080,"resetsAt":1788748168}}}}}"#.utf8)
+let accountRateLimits = AccountRateLimitResponseParser.parse(accountRateLimitsFixture)
+check(accountRateLimits?.fiveHour?.usedPercent == 41, "prefer codex five-hour account limit")
+check(accountRateLimits?.weekly?.usedPercent == 61, "prefer codex weekly account limit")
+check(accountRateLimits?.statusKind == .fiveHour, "account five-hour limit drives status")
+check(
+  AccountRateLimitResponseParser.parse(Data(#"{"id":2,"error":{"code":-32603}}"#.utf8)) == nil,
+  "reject failed account limit response"
+)
+check(
+  AccountRateLimitResponseParser.parse(
+    Data(#"{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":null,"secondary":null},"rateLimitsByLimitId":null}}"#.utf8)
+  ) == nil,
+  "reject empty account limit response"
+)
+
+var responseCollector = JSONRPCLineCollector(expectedResponseIDs: [2])
+responseCollector.consume(Data(#"{"method":"account/rateLimits/updated","params":{}}"#.utf8))
+responseCollector.consume(Data("\n{\"id\":2,\"res".utf8))
+check(!responseCollector.isComplete, "partial RPC response remains incomplete")
+responseCollector.consume(Data("ult\":{}}\n".utf8))
+check(responseCollector.isComplete, "collector completes after split response")
+check(responseCollector.response(for: 2) == Data(#"{"id":2,"result":{}}"#.utf8), "collector keeps requested response")
+
 var accumulator = SessionUsageAccumulator()
 check(accumulator.consume(totalTokens: 100) == 100, "first counter")
 check(accumulator.consume(totalTokens: 140) == 40, "counter delta")
@@ -262,6 +286,18 @@ check(weeklyOnlySnapshot.fiveHourLimit == nil, "snapshot omits unavailable five-
 check(weeklyOnlySnapshot.weeklyLimit?.usedPercent == 75, "snapshot exposes weekly-only limit")
 check(weeklyOnlySnapshot.statusLimitKind == .weekly, "snapshot uses weekly status fallback")
 check(weeklyOnlySnapshot.statusColor == .orange, "weekly remaining percentage drives status color")
+
+let accountUpdatedAt = countdownNow.addingTimeInterval(180)
+let accountUpdatedSnapshot = weeklyOnlySnapshot.replacingRateLimits(
+  accountRateLimits!,
+  updatedAt: accountUpdatedAt
+)
+check(accountUpdatedSnapshot.fiveHourLimit?.usedPercent == 41, "account data restores five-hour limit")
+check(accountUpdatedSnapshot.weeklyLimit?.usedPercent == 61, "account data replaces stale weekly limit")
+check(accountUpdatedSnapshot.statusLimitKind == .fiveHour, "restored five-hour limit drives status")
+check(accountUpdatedSnapshot.statusColor == .yellow, "restored limit updates status color")
+check(accountUpdatedSnapshot.latestRateLimitAt == accountUpdatedAt, "account fetch time drives freshness")
+check(accountUpdatedSnapshot.todayTotal == weeklyOnlySnapshot.todayTotal, "rate update preserves usage metrics")
 
 let encodedIndex = try JSONEncoder().encode(usageIndex)
 let decodedIndex = try JSONDecoder().decode(UsageIndex.self, from: encodedIndex)

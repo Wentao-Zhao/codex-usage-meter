@@ -5,20 +5,27 @@ final class UsageService {
   var onSnapshot: ((UsageSnapshot) -> Void)?
 
   private let indexer: UsageLogIndexer
+  private let accountClient: CodexAppServerClient
   private let sessionRoots: [URL]
   private let queue = DispatchQueue(
     label: "com.local.CodexMeter.usage",
     qos: .utility
   )
   private lazy var monitor = UsageDirectoryMonitor(paths: sessionRoots) { [weak self] in
-    self?.refreshNow()
+    self?.refreshUsageLogs()
   }
   private var reconcileTimer: DispatchSourceTimer?
   private var countdownTimer: DispatchSourceTimer?
   private var isRunning = false
+  private var latestAccountRateLimits: ResolvedRateLimits?
+  private var latestAccountRateLimitsAt: Date?
 
-  init(configuration: UsageLogIndexer.Configuration) {
+  init(
+    configuration: UsageLogIndexer.Configuration,
+    accountClient: CodexAppServerClient = CodexAppServerClient()
+  ) {
     self.indexer = UsageLogIndexer(configuration: configuration)
+    self.accountClient = accountClient
     self.sessionRoots = configuration.sessionRoots
   }
 
@@ -71,13 +78,46 @@ final class UsageService {
       guard let self, self.isRunning else {
         return
       }
-      do {
-        let snapshot = try self.indexer.refresh(isIndexing: false)
-        self.publish(snapshot)
-      } catch {
-        self.publish(self.indexer.cachedSnapshot(isIndexing: false))
-      }
+      self.refreshUsageLogsOnQueue()
+      self.refreshAccountRateLimitsOnQueue()
     }
+  }
+
+  private func refreshUsageLogs() {
+    queue.async { [weak self] in
+      guard let self, self.isRunning else {
+        return
+      }
+      self.refreshUsageLogsOnQueue()
+    }
+  }
+
+  private func refreshUsageLogsOnQueue() {
+    do {
+      publish(applyingAccountRateLimits(to: try indexer.refresh(isIndexing: false)))
+    } catch {
+      publish(applyingAccountRateLimits(to: indexer.cachedSnapshot(isIndexing: false)))
+    }
+  }
+
+  private func refreshAccountRateLimitsOnQueue() {
+    do {
+      latestAccountRateLimits = try accountClient.fetchRateLimits()
+      latestAccountRateLimitsAt = Date()
+    } catch {
+      // Keep the last successful account snapshot and continue using JSONL as fallback.
+    }
+    publish(applyingAccountRateLimits(to: indexer.cachedSnapshot(isIndexing: false)))
+  }
+
+  private func applyingAccountRateLimits(to snapshot: UsageSnapshot) -> UsageSnapshot {
+    guard let latestAccountRateLimits, let latestAccountRateLimitsAt else {
+      return snapshot
+    }
+    return snapshot.replacingRateLimits(
+      latestAccountRateLimits,
+      updatedAt: latestAccountRateLimitsAt
+    )
   }
 
   private func configureMonitor() {
@@ -91,11 +131,8 @@ final class UsageService {
       guard let self, self.isRunning else {
         return
       }
-      do {
-        self.publish(try self.indexer.refresh(isIndexing: false))
-      } catch {
-        self.publish(self.indexer.cachedSnapshot(isIndexing: false))
-      }
+      self.refreshUsageLogsOnQueue()
+      self.refreshAccountRateLimitsOnQueue()
     }
     reconcile.resume()
     reconcileTimer = reconcile
@@ -106,7 +143,11 @@ final class UsageService {
       guard let self, self.isRunning else {
         return
       }
-      self.publish(self.indexer.cachedSnapshot(isIndexing: false))
+      self.publish(
+        self.applyingAccountRateLimits(
+          to: self.indexer.cachedSnapshot(isIndexing: false)
+        )
+      )
     }
     countdown.resume()
     countdownTimer = countdown

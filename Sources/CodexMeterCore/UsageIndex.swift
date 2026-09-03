@@ -56,6 +56,43 @@ public struct UsageSnapshot: Equatable, Sendable {
   public var hasUsage: Bool {
     allTimeTotal > 0
   }
+
+  public func replacingRateLimits(
+    _ rateLimits: ResolvedRateLimits,
+    updatedAt: Date
+  ) -> UsageSnapshot {
+    let statusWindow = rateLimits.statusWindow
+    let isStale = statusWindow.map {
+      RateLimitPolicy.isStale($0, now: generatedAt)
+    } ?? true
+    let remaining = statusWindow.map(RateLimitPolicy.remainingPercent(for:))
+
+    return UsageSnapshot(
+      generatedAt: generatedAt,
+      isIndexing: isIndexing,
+      todayTotal: todayTotal,
+      previousDayTotal: previousDayTotal,
+      weekTotal: weekTotal,
+      previousWeekTotal: previousWeekTotal,
+      allTimeTotal: allTimeTotal,
+      allTimeUsage: allTimeUsage,
+      allTimeCredits: allTimeCredits,
+      hourly: hourly,
+      previousDayHourly: previousDayHourly,
+      weekly: weekly,
+      previousWeekDaily: previousWeekDaily,
+      monthly: monthly,
+      monthKeys: monthKeys,
+      fiveHourLimit: rateLimits.fiveHour,
+      weeklyLimit: rateLimits.weekly,
+      statusLimitKind: rateLimits.statusKind,
+      latestRateLimitAt: updatedAt,
+      statusColor: RateLimitPolicy.color(
+        remainingPercent: remaining,
+        isStale: isStale
+      )
+    )
+  }
 }
 
 public struct UsageIndex: Codable, Equatable, Sendable {

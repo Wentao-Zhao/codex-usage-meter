@@ -26,7 +26,9 @@
 
 ## 数据来源
 
-CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会识别分叉子任务携带的父任务历史，避免同一段累计用量被重复统计。它不上传数据，也不依赖网络接口。
+CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会识别分叉子任务携带的父任务历史，避免同一段累计用量被重复统计。
+
+额度数据通过本机 Codex 提供的 `account/rateLimits/read` 接口读取，并优先选择 Codex 主额度，避免被其他额度分组覆盖。额度每 5 分钟低频刷新；暂时读取失败时保留上次成功结果，并回退到会话日志中的额度信息。CodexMeter 不上传日志，也不需要额外的 API 凭证。
 
 原始总量表示模型处理过的 Token 数，包含缓存输入；等效 credits 会分别按普通输入、缓存输入和输出的内置费率折算。费率或日志格式变化时，最终结果仍以 Codex 官方用量页面为准。
 
@@ -37,7 +39,7 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 从 GitHub Releases 下载最新 DMG：
 
 ```text
-CodexMeter-1.1.0.dmg
+CodexMeter-1.2.1.dmg
 ```
 
 安装步骤：
@@ -56,7 +58,7 @@ CodexMeter-1.1.0.dmg
 
 ## 隐私边界
 
-- 只读取本机 Codex 日志。
+- 只读取本机 Codex 日志和本机 Codex 返回的账户额度。
 - 不上传日志，不上传 token 用量。
 - 不需要 GitHub、OpenAI 或 Codex API 凭证。
 - 只做本机估算展示，最终额度以 Codex 官方界面为准。
@@ -90,7 +92,7 @@ CODEX_METER_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
 生成文件：
 
 ```text
-dist/CodexMeter-1.1.0.dmg
+dist/CodexMeter-1.2.1.dmg
 ```
 
 ## 自动化检查
