@@ -10,8 +10,9 @@
 - Codex 提供 5 小时额度时，显示剩余比例和距离刷新还有多少分钟。
 - 显示本周剩余比例、距离周刷新还有多少天。
 - Codex 未提供 5 小时额度时，自动隐藏对应卡片，并将周额度卡片铺满面板宽度。
-- 展示今日、本周、本机总量的缩略折线图。
-- 本机总量区分普通输入、缓存输入和输出 Token，并按当前模型费率显示等效 credits。
+- 今日消耗展示小时趋势，本周消耗展示逐日对比柱图。
+- 本机总量使用独立数字和右侧比例条，下方以三列展示普通输入、缓存输入、输出的数值与占比，并显示等效 credits。
+- 百分比位于各分栏右上方，小于 1% 的非零占比显示为 `<1%`；悬停总量或分项数值可查看完整 Token 数。
 - 右键菜单支持开机自启开关和退出 App。
 - 以低频扫描和缓存索引为主，尽量减少 CPU 和磁盘占用。
 
@@ -39,7 +40,7 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 从 GitHub Releases 下载最新 DMG：
 
 ```text
-CodexMeter-1.2.1.dmg
+CodexMeter-1.2.2.dmg
 ```
 
 安装步骤：
@@ -92,7 +93,7 @@ CODEX_METER_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
 生成文件：
 
 ```text
-dist/CodexMeter-1.2.1.dmg
+dist/CodexMeter-1.2.2.dmg
 ```
 
 ## 自动化检查

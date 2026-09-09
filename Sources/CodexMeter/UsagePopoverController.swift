@@ -116,7 +116,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
 
     NSLayoutConstraint.activate([
       rootView.widthAnchor.constraint(equalToConstant: 320),
-      rootView.heightAnchor.constraint(equalToConstant: 444),
+      rootView.heightAnchor.constraint(equalToConstant: 450),
 
       titleLabel.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 16),
       titleLabel.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
@@ -140,13 +140,13 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
       totalCard.topAnchor.constraint(equalTo: weekCard.bottomAnchor, constant: 8),
       totalCard.leadingAnchor.constraint(equalTo: todayCard.leadingAnchor),
       totalCard.trailingAnchor.constraint(equalTo: todayCard.trailingAnchor),
-      totalCard.heightAnchor.constraint(equalToConstant: 104),
+      totalCard.heightAnchor.constraint(equalToConstant: 110),
       totalCard.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -16),
     ])
 
     let viewController = NSViewController()
     viewController.view = rootView
-    viewController.preferredContentSize = NSSize(width: 320, height: 444)
+    viewController.preferredContentSize = NSSize(width: 320, height: 450)
     popover.contentViewController = viewController
   }
 
@@ -523,7 +523,15 @@ private final class ComparisonMetricCardView: CardView {
   }
 }
 
-private final class CompositionRowView: NSView {
+private final class CompositionColumnView: NSView {
+  private static let percentFormatter: NumberFormatter = {
+    let formatter = NumberFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.numberStyle = .percent
+    formatter.maximumFractionDigits = 1
+    return formatter
+  }()
+
   private let swatch = NSView()
   private let nameLabel = NSTextField(labelWithString: "")
   private let valueLabel = NSTextField(labelWithString: "0")
@@ -538,11 +546,13 @@ private final class CompositionRowView: NSView {
     nameLabel.stringValue = name
     nameLabel.font = .systemFont(ofSize: 8)
     nameLabel.textColor = .secondaryLabelColor
-    valueLabel.font = .monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-    valueLabel.alignment = .right
+    valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    valueLabel.lineBreakMode = .byTruncatingTail
     percentLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
     percentLabel.textColor = .tertiaryLabelColor
     percentLabel.alignment = .right
+    nameLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+    percentLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
     [swatch, nameLabel, valueLabel, percentLabel].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
@@ -550,20 +560,19 @@ private final class CompositionRowView: NSView {
     }
 
     NSLayoutConstraint.activate([
-      heightAnchor.constraint(equalToConstant: 17),
       swatch.leadingAnchor.constraint(equalTo: leadingAnchor),
-      swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
-      swatch.widthAnchor.constraint(equalToConstant: 7),
-      swatch.heightAnchor.constraint(equalToConstant: 7),
-      nameLabel.leadingAnchor.constraint(equalTo: swatch.trailingAnchor, constant: 7),
-      nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 6),
-      valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      valueLabel.widthAnchor.constraint(equalToConstant: 46),
-      percentLabel.leadingAnchor.constraint(equalTo: valueLabel.trailingAnchor, constant: 5),
+      swatch.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
+      swatch.widthAnchor.constraint(equalToConstant: 5),
+      swatch.heightAnchor.constraint(equalToConstant: 5),
+      nameLabel.leadingAnchor.constraint(equalTo: swatch.trailingAnchor, constant: 4),
+      nameLabel.topAnchor.constraint(equalTo: topAnchor),
+      percentLabel.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 4),
       percentLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-      percentLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      percentLabel.widthAnchor.constraint(equalToConstant: 25),
+      percentLabel.firstBaselineAnchor.constraint(equalTo: nameLabel.firstBaselineAnchor),
+      valueLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+      valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+      valueLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+      valueLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
     ])
   }
 
@@ -573,7 +582,10 @@ private final class CompositionRowView: NSView {
 
   func update(value: Int64, fraction: Double) {
     valueLabel.stringValue = TokenCountFormatter.string(from: value)
-    percentLabel.stringValue = "\(Int((fraction * 100).rounded()))%"
+    valueLabel.toolTip = value.formatted(.number.locale(Locale(identifier: "en_US_POSIX"))) + " Tokens"
+    percentLabel.stringValue = fraction > 0 && fraction < 0.01
+      ? "<1%"
+      : Self.percentFormatter.string(from: NSNumber(value: fraction)) ?? "0%"
   }
 }
 
@@ -583,44 +595,44 @@ private final class UsageSummaryCardView: CardView {
     accentColor: NSColor(calibratedRed: 0.68, green: 0.57, blue: 0.75, alpha: 1)
   )
   private let totalLabel = NSTextField(labelWithString: "0")
-  private let totalCaptionLabel = NSTextField(labelWithString: "全部 Token")
+  private let totalCaptionLabel = NSTextField(labelWithString: "Tokens")
   private let creditLabel = NSTextField(labelWithString: "≈ 0 credits")
-  private let ringView = TokenCompositionRingView()
-  private let inputRow = CompositionRowView(
+  private let compositionBar = TokenCompositionBarView()
+  private let inputColumn = CompositionColumnView(
     name: "普通输入",
-    color: TokenCompositionRingView.uncachedInputColor
+    color: TokenCompositionBarView.uncachedInputColor
   )
-  private let cacheRow = CompositionRowView(
+  private let cacheColumn = CompositionColumnView(
     name: "缓存输入",
-    color: TokenCompositionRingView.cachedInputColor
+    color: TokenCompositionBarView.cachedInputColor
   )
-  private let outputRow = CompositionRowView(
+  private let outputColumn = CompositionColumnView(
     name: "输出",
-    color: TokenCompositionRingView.outputColor
+    color: TokenCompositionBarView.outputColor
   )
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
 
-    totalLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-    totalLabel.alignment = .center
-    totalCaptionLabel.font = .systemFont(ofSize: 7)
+    totalLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+    totalLabel.lineBreakMode = .byTruncatingTail
+    totalCaptionLabel.font = .systemFont(ofSize: 8)
     totalCaptionLabel.textColor = .tertiaryLabelColor
-    totalCaptionLabel.alignment = .center
+    totalCaptionLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
     creditLabel.font = .monospacedDigitSystemFont(ofSize: 8, weight: .regular)
     creditLabel.textColor = .secondaryLabelColor
 
-    let centerStack = NSStackView(views: [totalLabel, totalCaptionLabel])
-    centerStack.orientation = .vertical
-    centerStack.alignment = .centerX
-    centerStack.spacing = 1
+    let columns = NSStackView(views: [inputColumn, cacheColumn, outputColumn])
+    columns.orientation = .horizontal
+    columns.alignment = .height
+    columns.distribution = .fillEqually
+    columns.spacing = 12
 
-    let rows = NSStackView(views: [inputRow, cacheRow, outputRow])
-    rows.orientation = .vertical
-    rows.alignment = .width
-    rows.spacing = 3
+    let divider = makeDivider()
+    let columnDividers = [makeDivider(), makeDivider()]
 
-    [titleView, creditLabel, ringView, centerStack, rows].forEach {
+    ([titleView, creditLabel, compositionBar, totalLabel, totalCaptionLabel, columns, divider]
+      + columnDividers).forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
       addSubview($0)
     }
@@ -630,19 +642,36 @@ private final class UsageSummaryCardView: CardView {
       titleView.topAnchor.constraint(equalTo: topAnchor, constant: 9),
       creditLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
       creditLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
+      titleView.trailingAnchor.constraint(lessThanOrEqualTo: creditLabel.leadingAnchor, constant: -6),
 
-      ringView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-      ringView.topAnchor.constraint(equalTo: topAnchor, constant: 28),
-      ringView.widthAnchor.constraint(equalToConstant: 64),
-      ringView.heightAnchor.constraint(equalToConstant: 64),
-      centerStack.centerXAnchor.constraint(equalTo: ringView.centerXAnchor),
-      centerStack.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
-      centerStack.widthAnchor.constraint(lessThanOrEqualTo: ringView.widthAnchor, constant: -8),
+      totalLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      totalLabel.topAnchor.constraint(equalTo: titleView.bottomAnchor, constant: 7),
+      totalCaptionLabel.leadingAnchor.constraint(equalTo: totalLabel.trailingAnchor, constant: 5),
+      totalCaptionLabel.firstBaselineAnchor.constraint(equalTo: totalLabel.firstBaselineAnchor),
+      totalCaptionLabel.trailingAnchor.constraint(lessThanOrEqualTo: compositionBar.leadingAnchor, constant: -16),
+      compositionBar.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      compositionBar.centerYAnchor.constraint(equalTo: totalLabel.centerYAnchor),
+      compositionBar.widthAnchor.constraint(equalToConstant: 114),
+      compositionBar.heightAnchor.constraint(equalToConstant: 4),
 
-      rows.leadingAnchor.constraint(equalTo: ringView.trailingAnchor, constant: 12),
-      rows.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-      rows.centerYAnchor.constraint(equalTo: ringView.centerYAnchor),
+      divider.topAnchor.constraint(equalTo: totalLabel.bottomAnchor, constant: 10),
+      divider.leadingAnchor.constraint(equalTo: totalLabel.leadingAnchor),
+      divider.trailingAnchor.constraint(equalTo: compositionBar.trailingAnchor),
+      divider.heightAnchor.constraint(equalToConstant: 0.5),
+      columns.topAnchor.constraint(equalTo: divider.bottomAnchor, constant: 8),
+      columns.leadingAnchor.constraint(equalTo: divider.leadingAnchor),
+      columns.trailingAnchor.constraint(equalTo: divider.trailingAnchor),
+      columns.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
     ])
+
+    for (column, separator) in zip([inputColumn, cacheColumn], columnDividers) {
+      NSLayoutConstraint.activate([
+        separator.leadingAnchor.constraint(equalTo: column.trailingAnchor, constant: 6),
+        separator.widthAnchor.constraint(equalToConstant: 0.5),
+        separator.topAnchor.constraint(equalTo: columns.topAnchor),
+        separator.bottomAnchor.constraint(equalTo: columns.bottomAnchor),
+      ])
+    }
   }
 
   required init?(coder: NSCoder) {
@@ -655,12 +684,20 @@ private final class UsageSummaryCardView: CardView {
     credits: Double
   ) {
     totalLabel.stringValue = TokenCountFormatter.string(from: total)
+    totalLabel.toolTip = total.formatted(.number.locale(Locale(identifier: "en_US_POSIX"))) + " Tokens"
     creditLabel.stringValue = "≈ \(CreditCountFormatter.string(from: credits)) credits"
     let inputTokens = usage.uncachedInputTokens + usage.unclassifiedTokens
     let composition = UsageChartGeometry.composition(usage: usage)
-    ringView.usage = usage
-    inputRow.update(value: inputTokens, fraction: composition.uncachedInput)
-    cacheRow.update(value: usage.cachedInputTokens, fraction: composition.cachedInput)
-    outputRow.update(value: usage.outputTokens, fraction: composition.output)
+    compositionBar.usage = usage
+    inputColumn.update(value: inputTokens, fraction: composition.uncachedInput)
+    cacheColumn.update(value: usage.cachedInputTokens, fraction: composition.cachedInput)
+    outputColumn.update(value: usage.outputTokens, fraction: composition.output)
+  }
+
+  private func makeDivider() -> NSView {
+    let view = NSView()
+    view.wantsLayer = true
+    view.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.22).cgColor
+    return view
   }
 }
