@@ -31,6 +31,8 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 
 额度数据通过本机 Codex 提供的 `account/rateLimits/read` 接口读取，并优先选择 Codex 主额度，避免被其他额度分组覆盖。额度每 5 分钟低频刷新；暂时读取失败时保留上次成功结果，并回退到会话日志中的额度信息。CodexMeter 不上传日志，也不需要额外的 API 凭证。
 
+自动识别新版桌面端的 `codex-cli/bin/codex` 入口、嵌套的 CodexCLI App 和旧版内置程序路径，优先使用已安装桌面端提供的服务。
+
 原始总量表示模型处理过的 Token 数，包含缓存输入；等效 credits 会分别按普通输入、缓存输入和输出的内置费率折算。费率或日志格式变化时，最终结果仍以 Codex 官方用量页面为准。
 
 统计值依赖本机日志的完整性。如果日志被清理或日志目录变化，显示结果会相应变化。
@@ -40,7 +42,7 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 从 GitHub Releases 下载最新 DMG：
 
 ```text
-CodexMeter-1.2.2.dmg
+CodexMeter-1.2.3.dmg
 ```
 
 安装步骤：
@@ -93,7 +95,7 @@ CODEX_METER_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
 生成文件：
 
 ```text
-dist/CodexMeter-1.2.2.dmg
+dist/CodexMeter-1.2.3.dmg
 ```
 
 ## 自动化检查
@@ -102,6 +104,24 @@ dist/CodexMeter-1.2.2.dmg
 
 ```bash
 swift run CodexMeterLogicTests
+```
+
+程序路径回归检查（无需联网）：
+
+```bash
+zsh scripts/check-account-connection.sh --offline
+```
+
+实际账户额度连接检查（使用本机 Codex 登录状态）：
+
+```bash
+zsh scripts/check-account-connection.sh
+```
+
+原生额度卡片布局检查（浅色/深色、不同百分比、仅周额度；可选输出预览图）：
+
+```bash
+zsh scripts/check-quota-layout.sh .build/quota-layout-previews
 ```
 
 发布构建：

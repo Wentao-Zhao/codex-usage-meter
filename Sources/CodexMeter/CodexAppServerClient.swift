@@ -131,26 +131,42 @@ final class CodexAppServerClient {
   private static func locateExecutable() -> URL? {
     let fileManager = FileManager.default
     let home = fileManager.homeDirectoryForCurrentUser
-    var candidates: [URL] = []
+    var applicationURLs: [URL] = []
 
     if let appURL = NSWorkspace.shared.urlForApplication(
       withBundleIdentifier: "com.openai.codex"
     ) {
-      candidates.append(
-        appURL.appendingPathComponent("Contents/Resources/codex")
-      )
+      applicationURLs.append(appURL)
     }
 
-    candidates.append(contentsOf: [
-      URL(fileURLWithPath: "/Applications/ChatGPT.app/Contents/Resources/codex"),
-      URL(fileURLWithPath: "/Applications/Codex.app/Contents/Resources/codex"),
+    applicationURLs.append(contentsOf: [
+      URL(fileURLWithPath: "/Applications/ChatGPT.app"),
+      URL(fileURLWithPath: "/Applications/Codex.app"),
+    ])
+
+    return locateExecutable(applicationURLs: applicationURLs, fallbackURLs: [
       home.appendingPathComponent(".codex/plugins/.plugin-appserver/codex"),
       URL(fileURLWithPath: "/opt/homebrew/bin/codex"),
       URL(fileURLWithPath: "/usr/local/bin/codex"),
     ])
+  }
+
+  static func locateExecutable(applicationURLs: [URL], fallbackURLs: [URL]) -> URL? {
+    let fileManager = FileManager.default
+    let bundledPaths = [
+      "Contents/Resources/codex-cli/bin/codex",
+      "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+      "Contents/Resources/codex",
+    ]
+    let candidates = applicationURLs.flatMap { applicationURL in
+      bundledPaths.map { applicationURL.appendingPathComponent($0) }
+    } + fallbackURLs
 
     return candidates.first {
-      fileManager.isExecutableFile(atPath: $0.path)
+      var isDirectory: ObjCBool = false
+      return fileManager.fileExists(atPath: $0.path, isDirectory: &isDirectory)
+        && !isDirectory.boolValue
+        && fileManager.isExecutableFile(atPath: $0.path)
     }
   }
 }

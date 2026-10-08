@@ -338,13 +338,13 @@ private final class QuotaCardView: CardView {
       contentView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
       contentView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 3),
 
-      titleView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      percentLabel.topAnchor.constraint(equalTo: contentView.topAnchor),
+      titleView.centerYAnchor.constraint(equalTo: percentLabel.centerYAnchor),
       titleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-      percentLabel.centerYAnchor.constraint(equalTo: titleView.centerYAnchor),
       percentLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       titleView.trailingAnchor.constraint(lessThanOrEqualTo: percentLabel.leadingAnchor, constant: -8),
 
-      countdownLabel.topAnchor.constraint(equalTo: titleView.bottomAnchor, constant: 10),
+      countdownLabel.topAnchor.constraint(equalTo: percentLabel.bottomAnchor, constant: 6),
       countdownLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       countdownLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
