@@ -17,6 +17,7 @@ xcrun swiftc \
     -I "$MODULE_DIR" \
     "${OBJECTS[@]}" \
     Sources/CodexMeter/UsagePopoverController.swift \
+    Sources/CodexMeter/ResetNoticeFooterView.swift \
     Sources/CodexMeter/TokenCompositionBarView.swift \
     Sources/CodexMeter/StatusDotIcon.swift \
     Sources/CodexMeter/ComparisonLineChartView.swift \

@@ -21,6 +21,7 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     style: .bars
   )
   private let totalCard = UsageSummaryCardView()
+  private let resetFooter = ResetNoticeFooterView()
 
   override init() {
     super.init()
@@ -40,6 +41,10 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
 
   func close() {
     popover.performClose(nil)
+  }
+
+  func update(resetNotice: ResetNoticeState) {
+    resetFooter.update(resetNotice)
   }
 
   func popoverDidClose(_ notification: Notification) {
@@ -109,14 +114,14 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
     quotaStack.detachesHiddenViews = true
     primaryCard.isHidden = true
 
-    [titleLabel, updatedLabel, quotaStack, todayCard, weekCard, totalCard].forEach {
+    [titleLabel, updatedLabel, quotaStack, todayCard, weekCard, totalCard, resetFooter].forEach {
       $0.translatesAutoresizingMaskIntoConstraints = false
       rootView.addSubview($0)
     }
 
     NSLayoutConstraint.activate([
       rootView.widthAnchor.constraint(equalToConstant: 320),
-      rootView.heightAnchor.constraint(equalToConstant: 450),
+      rootView.heightAnchor.constraint(equalToConstant: 492),
 
       titleLabel.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 16),
       titleLabel.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
@@ -141,12 +146,16 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
       totalCard.leadingAnchor.constraint(equalTo: todayCard.leadingAnchor),
       totalCard.trailingAnchor.constraint(equalTo: todayCard.trailingAnchor),
       totalCard.heightAnchor.constraint(equalToConstant: 110),
-      totalCard.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -16),
+      resetFooter.topAnchor.constraint(equalTo: totalCard.bottomAnchor, constant: 10),
+      resetFooter.leadingAnchor.constraint(equalTo: totalCard.leadingAnchor),
+      resetFooter.trailingAnchor.constraint(equalTo: totalCard.trailingAnchor),
+      resetFooter.heightAnchor.constraint(equalToConstant: 32),
+      resetFooter.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -16),
     ])
 
     let viewController = NSViewController()
     viewController.view = rootView
-    viewController.preferredContentSize = NSSize(width: 320, height: 450)
+    viewController.preferredContentSize = NSSize(width: 320, height: 492)
     popover.contentViewController = viewController
   }
 

@@ -3,6 +3,7 @@ import Foundation
 
 final class UsageService {
   var onSnapshot: ((UsageSnapshot) -> Void)?
+  var onMinuteTick: (() -> Void)?
 
   private let indexer: UsageLogIndexer
   private let accountClient: CodexAppServerClient
@@ -148,6 +149,7 @@ final class UsageService {
           to: self.indexer.cachedSnapshot(isIndexing: false)
         )
       )
+      DispatchQueue.main.async { [weak self] in self?.onMinuteTick?() }
     }
     countdown.resume()
     countdownTimer = countdown

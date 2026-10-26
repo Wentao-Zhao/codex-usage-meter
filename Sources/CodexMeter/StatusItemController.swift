@@ -7,6 +7,8 @@ final class StatusItemController: NSObject {
   private let popoverController = UsagePopoverController()
   private let onRefresh: () -> Void
   private let onQuit: () -> Void
+  var notificationsEnabled: () -> Bool = { false }
+  var onToggleNotifications: (() -> Void)?
   private var localEventMonitor: Any?
   private var globalEventMonitor: Any?
 
@@ -21,6 +23,10 @@ final class StatusItemController: NSObject {
     statusItem.button?.image = StatusDotIcon.image(for: snapshot.statusColor)
     statusItem.button?.toolTip = tooltip(for: snapshot)
     popoverController.update(snapshot: snapshot)
+  }
+
+  func update(resetNotice: ResetNoticeState) {
+    popoverController.update(resetNotice: resetNotice)
   }
 
   private func configure() {
@@ -61,6 +67,11 @@ final class StatusItemController: NSObject {
     )
     refreshItem.target = self
     menu.addItem(refreshItem)
+
+    let notificationItem = NSMenuItem(title: "重置动态通知", action: #selector(toggleResetNotifications), keyEquivalent: "")
+    notificationItem.target = self
+    notificationItem.state = notificationsEnabled() ? .on : .off
+    menu.addItem(notificationItem)
 
     let launchItem = NSMenuItem(
       title: "开机自启",
@@ -133,6 +144,10 @@ final class StatusItemController: NSObject {
 
   @objc private func refreshNow() {
     onRefresh()
+  }
+
+  @objc private func toggleResetNotifications() {
+    onToggleNotifications?()
   }
 
   @objc private func toggleLaunchAtLogin() {

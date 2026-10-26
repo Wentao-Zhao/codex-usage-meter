@@ -604,4 +604,5 @@ try Data("event".utf8).write(to: eventMonitorRoot.appendingPathComponent("change
 check(eventMonitorSignal.wait(timeout: .now() + 3) == .success, "FSEvents observes directory change")
 directoryMonitor.stop()
 
+runResetAnnouncementChecks { check($0, $1) }
 print("PASS: \(checks) checks")
