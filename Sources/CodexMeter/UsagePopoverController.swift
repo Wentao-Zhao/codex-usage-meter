@@ -160,6 +160,13 @@ final class UsagePopoverController: NSObject, NSPopoverDelegate {
   }
 
   private static func updateText(for snapshot: UsageSnapshot, now: Date) -> String {
+    if let progress = snapshot.historyScanProgress {
+      if progress.failed > 0 && progress.completed + progress.failed == progress.total {
+        return "历史待重试 \(progress.failed) 项"
+      }
+      let current = progress.currentFilePercent.map { " · \($0)%" } ?? ""
+      return "历史补扫 \(progress.completed)/\(progress.total)\(current)"
+    }
     if snapshot.isIndexing {
       return "正在建立索引"
     }

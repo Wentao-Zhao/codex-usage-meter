@@ -30,6 +30,8 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 install -m 755 "$BIN_DIR/CodexMeter" "$MACOS_DIR/CodexMeter"
 install -m 644 "$ROOT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 install -m 644 "$ROOT_DIR/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+install -m 644 "$ROOT_DIR/Sources/CZstdDecoder/vendor/LICENSE" "$RESOURCES_DIR/Zstandard-LICENSE.txt"
+install -m 644 "$ROOT_DIR/Sources/CZstdDecoder/vendor/README.md" "$RESOURCES_DIR/Zstandard-NOTICES.txt"
 
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$CONTENTS_DIR/Info.plist")"
 SIGNING_IDENTITY="${CODEX_METER_SIGNING_IDENTITY:--}"

@@ -9,6 +9,7 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
   public var buckets: UsageBuckets
   public var latestRateLimit: TokenUsageEvent?
   public var scanContext: JSONLTokenScanContext
+  public var compressedFileSignature: String?
 
   public init(
     sessionID: String,
@@ -18,7 +19,8 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
     accumulator: SessionUsageAccumulator,
     buckets: UsageBuckets,
     latestRateLimit: TokenUsageEvent?,
-    scanContext: JSONLTokenScanContext = JSONLTokenScanContext()
+    scanContext: JSONLTokenScanContext = JSONLTokenScanContext(),
+    compressedFileSignature: String? = nil
   ) {
     self.sessionID = sessionID
     self.path = path
@@ -28,6 +30,7 @@ public struct SessionUsageIndex: Codable, Equatable, Sendable {
     self.buckets = buckets
     self.latestRateLimit = latestRateLimit
     self.scanContext = scanContext
+    self.compressedFileSignature = compressedFileSignature
   }
 }
 
@@ -52,6 +55,7 @@ public struct UsageSnapshot: Equatable, Sendable {
   public let statusLimitKind: RateLimitKind?
   public let latestRateLimitAt: Date?
   public let statusColor: UsageStatusColor
+  public let historyScanProgress: HistoryScanProgress?
 
   public var hasUsage: Bool {
     allTimeTotal > 0
@@ -90,7 +94,8 @@ public struct UsageSnapshot: Equatable, Sendable {
       statusColor: RateLimitPolicy.color(
         remainingPercent: remaining,
         isStale: isStale
-      )
+      ),
+      historyScanProgress: historyScanProgress
     )
   }
 }
@@ -123,7 +128,7 @@ public struct UsageIndex: Codable, Equatable, Sendable {
     sessions[id]
   }
 
-  public func snapshot(now: Date, isIndexing: Bool) -> UsageSnapshot {
+  public func snapshot(now: Date, isIndexing: Bool, historyScanProgress: HistoryScanProgress? = nil) -> UsageSnapshot {
     var merged = UsageBuckets(timeZoneIdentifier: timeZoneIdentifier)
     var latestEvent: TokenUsageEvent?
 
@@ -161,7 +166,22 @@ public struct UsageIndex: Codable, Equatable, Sendable {
       weeklyLimit: resolvedRateLimits?.weekly,
       statusLimitKind: resolvedRateLimits?.statusKind,
       latestRateLimitAt: latestEvent?.timestamp,
-      statusColor: RateLimitPolicy.color(remainingPercent: remaining, isStale: stale)
+      statusColor: RateLimitPolicy.color(remainingPercent: remaining, isStale: stale),
+      historyScanProgress: historyScanProgress
     )
+  }
+}
+
+public struct HistoryScanProgress: Equatable, Sendable {
+  public let completed: Int
+  public let total: Int
+  public let failed: Int
+  public let currentFilePercent: Int?
+
+  public init(completed: Int, total: Int, failed: Int = 0, currentFilePercent: Int? = nil) {
+    self.completed = completed
+    self.total = total
+    self.failed = failed
+    self.currentFilePercent = currentFilePercent
   }
 }

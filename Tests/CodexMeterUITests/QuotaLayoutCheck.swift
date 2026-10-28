@@ -33,6 +33,23 @@ enum QuotaLayoutCheck {
           throw LayoutError.invalid("Missing borderless footer or changed metric sizes")
         }
         checks += 1
+        for progress in [HistoryScanProgress(completed: 0, total: 400, currentFilePercent: 33), HistoryScanProgress(completed: 0, total: 400, failed: 400)] {
+          controller.update(snapshot: fixture(primary: primary, secondary: secondary, progress: progress))
+          root.layoutSubtreeIfNeeded()
+          let headers = root.subviews.compactMap { $0 as? NSTextField }
+          for header in headers {
+            guard header.frame.width + 1 >= header.intrinsicContentSize.width else {
+              throw LayoutError.invalid("History progress clipped: \(header.stringValue)")
+            }
+            checks += 1
+          }
+          if let output, name == "normal", progress.failed == 0 {
+            let bitmap = root.bitmapImageRepForCachingDisplay(in: root.bounds)!
+            root.cacheDisplay(in: root.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("\(appearanceName.rawValue)-history-progress.png"))
+          }
+        }
+        controller.update(snapshot: fixture(primary: primary, secondary: secondary))
 
         let cards = descendants(root).filter { String(describing: type(of: $0)) == "QuotaCardView" && !$0.isHidden }
         guard cards.count == (primary == nil ? 1 : 2) else {
@@ -95,7 +112,7 @@ enum QuotaLayoutCheck {
     view.subviews.flatMap { [$0] + descendants($0) }
   }
 
-  private static func fixture(primary: Double?, secondary: Double) -> UsageSnapshot {
+  private static func fixture(primary: Double?, secondary: Double, progress: HistoryScanProgress? = nil) -> UsageSnapshot {
     let now = Date()
     let event = TokenUsageEvent(
       timestamp: now, usage: nil, model: nil,
@@ -103,7 +120,7 @@ enum QuotaLayoutCheck {
       secondary: RateLimitWindow(usedPercent: secondary, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(7 * 86400))
     )
     let session = SessionUsageIndex(sessionID: "layout", path: "/layout", fileIdentity: "layout", parsedBytes: 0, accumulator: SessionUsageAccumulator(), buckets: UsageBuckets(timeZoneIdentifier: "Asia/Shanghai"), latestRateLimit: event)
-    return UsageIndex(timeZoneIdentifier: "Asia/Shanghai", sessions: ["layout": session]).snapshot(now: now, isIndexing: false)
+    return UsageIndex(timeZoneIdentifier: "Asia/Shanghai", sessions: ["layout": session]).snapshot(now: now, isIndexing: false, historyScanProgress: progress)
   }
 
   private static func noticeFixtures() throws -> [(String, ResetNoticeState)] {

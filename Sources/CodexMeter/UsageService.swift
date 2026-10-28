@@ -10,13 +10,15 @@ final class UsageService {
   private let sessionRoots: [URL]
   private let queue = DispatchQueue(
     label: "com.local.CodexMeter.usage",
-    qos: .utility
+    qos: .background
   )
   private lazy var monitor = UsageDirectoryMonitor(paths: sessionRoots) { [weak self] in
     self?.refreshUsageLogs()
   }
   private var reconcileTimer: DispatchSourceTimer?
   private var countdownTimer: DispatchSourceTimer?
+  private var archiveContinuation: DispatchWorkItem?
+  private var lastArchivePublish = -TimeInterval.infinity
   private var isRunning = false
   private var latestAccountRateLimits: ResolvedRateLimits?
   private var latestAccountRateLimitsAt: Date?
@@ -72,6 +74,11 @@ final class UsageService {
     countdownTimer?.cancel()
     reconcileTimer = nil
     countdownTimer = nil
+    queue.async { [weak self] in
+      self?.archiveContinuation?.cancel()
+      self?.archiveContinuation = nil
+      try? self?.indexer.cancelArchiveScan()
+    }
   }
 
   func refreshNow() {
@@ -96,9 +103,38 @@ final class UsageService {
   private func refreshUsageLogsOnQueue() {
     do {
       publish(applyingAccountRateLimits(to: try indexer.refresh(isIndexing: false)))
+      scheduleArchiveSlice()
     } catch {
       publish(applyingAccountRateLimits(to: indexer.cachedSnapshot(isIndexing: false)))
     }
+  }
+
+  private func scheduleArchiveSlice() {
+    guard isRunning, archiveContinuation == nil, indexer.hasPendingArchiveWork else { return }
+    let process = ProcessInfo.processInfo
+    let thermalPause = process.thermalState == .serious || process.thermalState == .critical
+    let delay: TimeInterval = thermalPause ? 30 : (process.isLowPowerModeEnabled ? 1 : 0.2)
+    let work = DispatchWorkItem(qos: .background) { [weak self] in
+      guard let self else { return }
+      self.archiveContinuation = nil
+      guard self.isRunning else { return }
+      let thermal = ProcessInfo.processInfo.thermalState
+      if thermal != .serious && thermal != .critical {
+        do {
+          _ = try self.indexer.scanArchiveSlice()
+          let uptime = ProcessInfo.processInfo.systemUptime
+          if !self.indexer.hasPendingArchiveWork || uptime - self.lastArchivePublish >= 1 {
+            self.publish(self.applyingAccountRateLimits(to: self.indexer.cachedSnapshot(isIndexing: false)))
+            self.lastArchivePublish = uptime
+          }
+        } catch {
+          // Retain valid data; a later normal reconciliation can retry persistence.
+        }
+      }
+      self.scheduleArchiveSlice()
+    }
+    archiveContinuation = work
+    queue.asyncAfter(deadline: .now() + delay, execute: work)
   }
 
   private func refreshAccountRateLimitsOnQueue() {

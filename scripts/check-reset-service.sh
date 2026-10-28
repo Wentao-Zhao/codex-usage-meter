@@ -11,6 +11,11 @@ else
     OBJECTS=("$BIN_DIR"/CodexMeterCore.build/*.swift.o)
     MODULE_DIR="$BIN_DIR/Modules"
 fi
+if [[ -f "$BIN_DIR/CZstdDecoder.o" ]]; then
+    OBJECTS+=("$BIN_DIR/CZstdDecoder.o")
+else
+    OBJECTS+=("$BIN_DIR"/CZstdDecoder.build/*.o)
+fi
 xcrun swiftc -I "$MODULE_DIR" "${OBJECTS[@]}" \
     Sources/CodexMeter/ResetNotificationSender.swift \
     Sources/CodexMeter/ResetAnnouncementService.swift \

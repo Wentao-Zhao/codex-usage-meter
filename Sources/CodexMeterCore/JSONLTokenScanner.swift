@@ -30,9 +30,23 @@ public struct JSONLTokenScanResult: Equatable, Sendable {
   public let committedOffset: UInt64
   public let initialUsage: TokenUsage?
   public let context: JSONLTokenScanContext
+  public let historyWasReset: Bool
 }
 
 public enum JSONLTokenScanner {
+  /// Preserves incomplete lines while returning only one bounded batch of events.
+  public final class Stream {
+    private var state = ScanState(startingOffset: 0, context: JSONLTokenScanContext())
+
+    public init() {}
+
+    public func consume(_ data: Data) -> JSONLTokenScanResult {
+      state.consume(data)
+      let result = state.result
+      state.drainBatch()
+      return result
+    }
+  }
   private static let tokenMarker = Data(#""type":"token_count""#.utf8)
   private static let sessionMarker = Data(#""type":"session_meta""#.utf8)
   private static let taskStartedMarker = Data(#""type":"task_started""#.utf8)
@@ -81,6 +95,7 @@ public enum JSONLTokenScanner {
     private var forkSessionID: String?
     private var isSkippingForkHistory = false
     private var currentModel: String?
+    private var historyWasReset = false
 
     init(startingOffset: UInt64, context: JSONLTokenScanContext) {
       committedOffset = startingOffset
@@ -105,8 +120,14 @@ public enum JSONLTokenScanner {
           isSkippingForkHistory: isSkippingForkHistory,
           forkBaselineUsage: forkBaselineUsage,
           currentModel: currentModel
-        )
+        ),
+        historyWasReset: historyWasReset
       )
+    }
+
+    mutating func drainBatch() {
+      events.removeAll(keepingCapacity: true)
+      historyWasReset = false
     }
 
     mutating func consume(_ data: Data) {
@@ -202,6 +223,7 @@ public enum JSONLTokenScanner {
         return
       }
       isSkippingForkHistory = true
+      historyWasReset = true
       forkBaselineUsage = nil
       currentModel = nil
       events.removeAll(keepingCapacity: true)

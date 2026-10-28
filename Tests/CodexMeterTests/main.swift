@@ -298,6 +298,8 @@ check(accountUpdatedSnapshot.statusLimitKind == .fiveHour, "restored five-hour l
 check(accountUpdatedSnapshot.statusColor == .yellow, "restored limit updates status color")
 check(accountUpdatedSnapshot.latestRateLimitAt == accountUpdatedAt, "account fetch time drives freshness")
 check(accountUpdatedSnapshot.todayTotal == weeklyOnlySnapshot.todayTotal, "rate update preserves usage metrics")
+let historyProgressSnapshot = weeklyOnlyIndex.snapshot(now: countdownNow, isIndexing: false, historyScanProgress: .init(completed: 1, total: 400, currentFilePercent: 33))
+check(historyProgressSnapshot.replacingRateLimits(accountRateLimits!, updatedAt: accountUpdatedAt).historyScanProgress == historyProgressSnapshot.historyScanProgress, "rate update preserves history progress")
 
 let encodedIndex = try JSONEncoder().encode(usageIndex)
 let decodedIndex = try JSONDecoder().decode(UsageIndex.self, from: encodedIndex)
@@ -327,6 +329,7 @@ let scanResult = JSONLTokenScanner.scan(data: scanFixture, startingOffset: 42)
 check(scanResult.events.count == 2, "scan token events only")
 check(scanResult.events.last?.totalTokens == 1_300, "scan second token event")
 check(scanResult.committedOffset == UInt64(42 + completeScanData.count), "retain incomplete tail")
+runStreamingScannerChecks(data: scanFixture) { check($0, $1) }
 
 func tokenLine(total: Int64, timestamp: String) -> Data {
   Data(#"{"timestamp":"\#(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":\#(total)}},"rate_limits":{"primary":{"used_percent":20.0,"window_minutes":300,"resets_at":1782879000},"secondary":{"used_percent":30.0,"window_minutes":10080,"resets_at":1783300000}}}}"#.utf8)
@@ -416,6 +419,7 @@ check(forkSnapshot.allTimeUsage.uncachedInputTokens == 40, "forked session input
 check(forkSnapshot.allTimeUsage.cachedInputTokens == 40, "forked session cached input delta")
 check(forkSnapshot.allTimeUsage.outputTokens == 20, "forked session output delta")
 check(abs(forkSnapshot.allTimeCredits - 0.01025) < 0.000_001, "forked session credit delta")
+runStreamingScannerChecks(data: Data((forkLines.joined(separator: "\n") + "\n").utf8)) { check($0, $1) }
 
 let incrementalModelRoot = integrationRoot.appendingPathComponent(
   "incremental-model-sessions",
@@ -605,4 +609,5 @@ check(eventMonitorSignal.wait(timeout: .now() + 3) == .success, "FSEvents observ
 directoryMonitor.stop()
 
 runResetAnnouncementChecks { check($0, $1) }
+try runCompressedHistoryChecks { check($0, $1) }
 print("PASS: \(checks) checks")
