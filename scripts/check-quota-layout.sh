@@ -25,6 +25,8 @@ xcrun swiftc \
     Sources/CodexMeter/ResetNoticeFooterView.swift \
     Sources/CodexMeter/TokenCompositionBarView.swift \
     Sources/CodexMeter/StatusDotIcon.swift \
+    Sources/CodexMeter/StatusItemController.swift \
+    Sources/CodexMeter/LaunchAtLoginController.swift \
     Sources/CodexMeter/ComparisonLineChartView.swift \
     Sources/CodexMeter/GroupedBarChartView.swift \
     Tests/CodexMeterUITests/QuotaLayoutCheck.swift \

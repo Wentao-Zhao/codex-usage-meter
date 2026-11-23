@@ -58,7 +58,7 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 从 GitHub Releases 下载最新 DMG：
 
 ```text
-CodexMeter-1.3.1.dmg
+CodexMeter-1.3.2.dmg
 ```
 
 安装步骤：
@@ -125,7 +125,7 @@ CODEX_METER_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
 生成文件：
 
 ```text
-dist/CodexMeter-1.3.1.dmg
+dist/CodexMeter-1.3.2.dmg
 ```
 
 ## 自动化检查

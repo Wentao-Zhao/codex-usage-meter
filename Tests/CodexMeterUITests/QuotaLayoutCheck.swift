@@ -11,6 +11,30 @@ enum QuotaLayoutCheck {
       try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     }
     var checks = 0
+    let status = StatusItemController(onRefresh: {}, onQuit: {})
+    guard let item = Mirror(reflecting: status).children.first(where: { $0.label == "statusItem" })?.value as? NSStatusItem,
+          let button = item.button else {
+      throw LayoutError.invalid("Missing status button")
+    }
+    guard button.toolTip == nil else { throw LayoutError.invalid("Initial status tooltip should be disabled") }
+    checks += 1
+    for snapshot in [
+      fixture(primary: 12, secondary: 4),
+      fixture(primary: nil, secondary: 25),
+      UsageIndex(timeZoneIdentifier: "Asia/Shanghai").snapshot(now: Date(), isIndexing: true),
+      UsageIndex(timeZoneIdentifier: "Asia/Shanghai").snapshot(now: Date(), isIndexing: false),
+    ] {
+      status.update(snapshot: snapshot)
+      guard button.toolTip == nil else {
+        throw LayoutError.invalid("Status tooltip reappeared after usage update: \(button.toolTip ?? "")")
+      }
+      guard button.accessibilityLabel() == "CodexMeter",
+            (button.accessibilityValue() as? String)?.isEmpty == false else {
+        throw LayoutError.invalid("Status remains accessible without showing a tooltip")
+      }
+      checks += 2
+    }
+    NSStatusBar.system.removeStatusItem(item)
     for appearanceName in [NSAppearance.Name.darkAqua, .aqua] {
       for (name, primary, secondary) in [("normal", Optional(13.0), 4.0), ("full", Optional(0.0), 0.0), ("empty", Optional(100.0), 100.0), ("weekly-only", nil, 4.0)] {
         let appearance = NSAppearance(named: appearanceName)!

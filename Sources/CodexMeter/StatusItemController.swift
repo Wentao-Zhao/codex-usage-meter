@@ -21,7 +21,7 @@ final class StatusItemController: NSObject {
 
   func update(snapshot: UsageSnapshot) {
     statusItem.button?.image = StatusDotIcon.image(for: snapshot.statusColor)
-    statusItem.button?.toolTip = tooltip(for: snapshot)
+    statusItem.button?.setAccessibilityValue(statusDescription(for: snapshot))
     popoverController.update(snapshot: snapshot)
   }
 
@@ -34,6 +34,8 @@ final class StatusItemController: NSObject {
       return
     }
     button.image = StatusDotIcon.image(for: .unknown)
+    button.toolTip = nil
+    button.setAccessibilityLabel("CodexMeter")
     button.imagePosition = .imageOnly
     button.target = self
     button.action = #selector(handleStatusItem(_:))
@@ -167,7 +169,7 @@ final class StatusItemController: NSObject {
     onQuit()
   }
 
-  private func tooltip(for snapshot: UsageSnapshot) -> String {
+  private func statusDescription(for snapshot: UsageSnapshot) -> String {
     if snapshot.isIndexing {
       return "CodexMeter：正在建立索引"
     }
