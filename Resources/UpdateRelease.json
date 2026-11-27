@@ -1,0 +1,8 @@
+{
+  "repository": "Wentao-Zhao/codex-usage-meter",
+  "app_name": "CodexMeter",
+  "target": "CodexMeter",
+  "key_account": "mac-app-updates.com.local.CodexMeter",
+  "sparkle_version": "2.10.1",
+  "source_repository": "Wentao-Zhao/codex-usage-meter"
+}

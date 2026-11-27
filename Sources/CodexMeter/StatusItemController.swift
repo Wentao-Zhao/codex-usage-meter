@@ -85,6 +85,8 @@ final class StatusItemController: NSObject {
     menu.addItem(launchItem)
 
     menu.addItem(.separator())
+    menu.addItem(AppUpdater.shared.makeMenuItem())
+    menu.addItem(.separator())
     let quitItem = NSMenuItem(
       title: "退出 CodexMeter",
       action: #selector(quit),

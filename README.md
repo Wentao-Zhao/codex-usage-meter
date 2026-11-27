@@ -58,7 +58,7 @@ CodexMeter 读取本机 Codex 会话日志，聚合 token 使用记录。它会�
 从 GitHub Releases 下载最新 DMG：
 
 ```text
-CodexMeter-1.3.2.dmg
+CodexMeter-1.4.0.dmg
 ```
 
 安装步骤：
@@ -125,7 +125,7 @@ CODEX_METER_SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk \
 生成文件：
 
 ```text
-dist/CodexMeter-1.3.2.dmg
+dist/CodexMeter-1.4.0.dmg
 ```
 
 ## 自动化检查
@@ -165,3 +165,31 @@ zsh scripts/check-reset-service.sh
 ```bash
 swift build -c release
 ```
+
+
+## 手动检查更新（Sparkle）
+
+在应用菜单或菜单栏右键菜单选择「检查更新…」，可查看新版并确认下载安装、替换应用和重启。仅手动触发，不自动轮询、下载或上传系统信息。首次需手动安装一版带 Sparkle 的新包。
+
+更新框架固定为 Sparkle 2.10.1，原始许可随应用打包在 `Contents/Resources/Sparkle-LICENSE.txt`。应用保持现有最低 macOS 要求。
+
+### 维护与发布
+
+- 发布配置：`Resources/UpdateRelease.json`；公钥与更新源：`Resources/Info.plist`。
+- 私钥保存在本机登录钥匙串的独立账户。禁止将私钥导出至仓库或提交；备份钥匙串，丢失后旧用户可能无法升级。
+- 更新源是 GitHub Release 的 `releases/latest/download/appcast.xml`，清单和 DMG 都签名。每次 Release 必须同时发布 appcast.xml、DMG 与 SHA256SUMS；不能只上传新 DMG。
+- 正式对外分发可配置 Developer ID 签名和公证；本次仍使用本地临时签名，无需额外购买服务。
+
+准备本地更新包（构建、检查更新器配置、签名和公钥验证）：
+
+```bash
+zsh scripts/release-update.sh --prepare
+```
+
+发布前提升 `CFBundleShortVersionString` 和递增 `CFBundleVersion`，提交并推送代码及对应的 annotated `v版本` 标签，再执行：
+
+```bash
+zsh scripts/release-update.sh --publish
+```
+
+发布脚本先创建草稿并上传全部附件，再设为最新版；不会覆盖已有 Release。`zsh scripts/check-updater.sh --network` 可检查线上 feed；`python3 Tests/UpdateTests/test_appcast.py` 验证生成与失败处理（可选真实密钥测试使用 Python cryptography，生产签名校验使用系统 CryptoKit）。

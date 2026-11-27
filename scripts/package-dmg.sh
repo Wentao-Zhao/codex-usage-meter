@@ -32,6 +32,6 @@ hdiutil create \
     -format UDZO \
     "$TMP_DMG_PATH"
 
-hdiutil verify "$TMP_DMG_PATH"
+zsh "$ROOT_DIR/scripts/verify-dmg.sh" "$TMP_DMG_PATH"
 mv -f "$TMP_DMG_PATH" "$DMG_PATH"
 echo "Created: $DMG_PATH"
