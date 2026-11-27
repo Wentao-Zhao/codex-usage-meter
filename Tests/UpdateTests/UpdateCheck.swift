@@ -14,6 +14,10 @@ final class CheckDelegate: NSObject, SPUUpdaterDelegate {
     completed = true
   }
   func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+    let reported = error as NSError
+    // Sparkle also ends a successful no-update check via SUNoUpdateError.
+    if completed && reported.domain == SUSparkleErrorDomain,
+       reported.code == SUError.noUpdateError.rawValue { return }
     fputs("FAIL: feed check: \(error.localizedDescription)\n", stderr)
     failures += 1
     completed = true
